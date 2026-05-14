@@ -1,0 +1,32 @@
+name: Build & Test
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'BarbershopApi/**'
+  pull_request:
+    paths:
+      - 'BarbershopApi/**'
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore packages
+        working-directory: BarbershopApi/src/BarbershopApi
+        run: dotnet restore
+
+      - name: Build
+        working-directory: BarbershopApi/src/BarbershopApi
+        run: dotnet build --no-restore --configuration Release
