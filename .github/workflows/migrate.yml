@@ -1,0 +1,45 @@
+name: Run Database Migrations
+
+on:
+  workflow_dispatch:          # manual trigger from GitHub UI
+  push:
+    branches: [main, claude/init-project-setup-lGMDV]
+    paths:
+      - 'BarbershopApi/src/BarbershopApi/Migrations/**'
+
+jobs:
+  migrate:
+    name: Apply EF Core Migrations
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install EF Core CLI
+        run: dotnet tool install --global dotnet-ef
+
+      - name: Restore packages
+        working-directory: BarbershopApi/src/BarbershopApi
+        run: dotnet restore
+
+      - name: Build
+        working-directory: BarbershopApi/src/BarbershopApi
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Migrate Auth DB
+        working-directory: BarbershopApi/src/BarbershopApi
+        env:
+          ConnectionStrings__AuthDb: ${{ secrets.BARBERSHOP_AUTH_DB }}
+        run: dotnet ef database update --context AuthDbContext --no-build --configuration Release
+
+      - name: Migrate App DB
+        working-directory: BarbershopApi/src/BarbershopApi
+        env:
+          ConnectionStrings__AppDb: ${{ secrets.BARBERSHOP_APP_DB }}
+        run: dotnet ef database update --context AppDbContext --no-build --configuration Release
