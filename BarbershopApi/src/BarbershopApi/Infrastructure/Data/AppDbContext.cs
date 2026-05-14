@@ -5,6 +5,7 @@ using BarbershopApi.Features.Services.Entities;
 using BarbershopApi.Features.Staff.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using BizProfile = BarbershopApi.Features.BusinessProfile.Entities.BusinessProfile;
 
 namespace BarbershopApi.Infrastructure.Data;
 
@@ -16,7 +17,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<Appointment> Appointments => Set<Appointment>();
     public DbSet<Service> Services => Set<Service>();
     public DbSet<StaffMember> StaffMembers => Set<StaffMember>();
-    public DbSet<BusinessProfile.Entities.BusinessProfile> BusinessProfiles => Set<BusinessProfile.Entities.BusinessProfile>();
+    public DbSet<BizProfile> BusinessProfiles => Set<BizProfile>();
     public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -67,7 +68,7 @@ public sealed class AppDbContext : DbContext
             entity.HasIndex(e => e.BarberShopId);
         });
 
-        modelBuilder.Entity<BusinessProfile.Entities.BusinessProfile>(entity =>
+        modelBuilder.Entity<BizProfile>(entity =>
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
