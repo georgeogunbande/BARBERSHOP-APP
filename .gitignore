@@ -1,0 +1,28 @@
+# .NET secrets - NEVER commit these
+BarbershopApi/src/BarbershopApi/appsettings.Development.json
+BarbershopApi/src/BarbershopApi/appsettings.Production.json
+BarbershopApi/src/BarbershopApi/appsettings.Local.json
+
+# .NET build output
+BarbershopApi/**/bin/
+BarbershopApi/**/obj/
+BarbershopApi/**/.vs/
+
+# User secrets
+BarbershopApi/**/secrets.json
+
+# EF Core migrations snapshot (optional - remove if you want to track migrations)
+# BarbershopApi/**/Migrations/
+
+# Node / React Native
+BarbershopApp/node_modules/
+BarbershopApp/.expo/
+BarbershopApp/dist/
+BarbershopApp/.env
+BarbershopApp/.env.local
+BarbershopApp/.env.development.local
+BarbershopApp/.env.production.local
+
+# OS
+.DS_Store
+Thumbs.db
