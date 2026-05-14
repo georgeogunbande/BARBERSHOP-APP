@@ -1,0 +1,19 @@
+# Build outputs
+bin/
+obj/
+
+# User-specific & secrets
+appsettings.Development.json
+appsettings.*.json
+!appsettings.json
+*.user
+.vs/
+
+# EF migrations temp
+*.db
+*.sqlite
+
+# Rider / VS
+.idea/
+*.suo
+*.sln.docstates
