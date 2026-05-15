@@ -1,12 +1,14 @@
 using BarbershopApi.Data;
 using BarbershopApi.DTOs;
 using BarbershopApi.Models.Enums;
-using BarbershopApi.Models.Payments;
 using BarbershopApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Stripe;
+using AppPayout = BarbershopApi.Models.Payments.Payout;
+using AppPayment = BarbershopApi.Models.Payments.Payment;
+using AppSavedPaymentMethod = BarbershopApi.Models.Payments.SavedPaymentMethod;
 
 namespace BarbershopApi.Controllers;
 
@@ -37,7 +39,7 @@ public class PaymentsController(AppDbContext db, ITenantService tenant, IConfigu
             existing.ForEach(m => m.IsDefault = false);
         }
 
-        var saved = new SavedPaymentMethod
+        var saved = new AppSavedPaymentMethod
         {
             BusinessId = bizId,
             ClientId = clientId,
@@ -101,7 +103,7 @@ public class PaymentsController(AppDbContext db, ITenantService tenant, IConfigu
             TransferData = new PaymentIntentTransferDataOptions { Destination = await GetStripeAccountAsync(bizId) }
         });
 
-        var payment = new Payment
+        var payment = new AppPayment
         {
             BusinessId = bizId,
             BookingId = req.BookingId,
@@ -176,7 +178,7 @@ public class PaymentsController(AppDbContext db, ITenantService tenant, IConfigu
         var platformFeePercent = GetPlatformFeePercent();
         var platformFee = Math.Round(totalAmount * platformFeePercent, 2);
 
-        var payment = new Payment
+        var payment = new AppPayment
         {
             BusinessId = bizId,
             BookingId = req.BookingId,
@@ -324,5 +326,5 @@ public class PayoutsController(AppDbContext db, ITenantService tenant, IConfigur
         return NoContent();
     }
 
-    private static PayoutDto MapPayout(Payout p) => new(p.Id, p.StripePayoutId, p.Amount, p.Currency, p.Status, p.ArrivalDate, p.CreatedAt);
+    private static PayoutDto MapPayout(AppPayout p) => new(p.Id, p.StripePayoutId, p.Amount, p.Currency, p.Status, p.ArrivalDate, p.CreatedAt);
 }

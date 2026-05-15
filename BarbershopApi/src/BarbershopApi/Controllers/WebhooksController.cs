@@ -1,8 +1,8 @@
 using BarbershopApi.Data;
 using BarbershopApi.Models.Enums;
-using BarbershopApi.Models.Payments;
 using Microsoft.AspNetCore.Mvc;
 using Stripe;
+using StripePayout = Stripe.Payout;
 
 namespace BarbershopApi.Controllers;
 
@@ -50,7 +50,7 @@ public class WebhooksController(AppDbContext db, IConfiguration config, ILogger<
             case EventTypes.TransferCreated:
             case EventTypes.PayoutPaid:
             {
-                var payout = stripeEvent.Data.Object as Payout;
+                var payout = stripeEvent.Data.Object as StripePayout;
                 await HandlePayoutAsync(payout!);
                 break;
             }
@@ -79,7 +79,7 @@ public class WebhooksController(AppDbContext db, IConfiguration config, ILogger<
         await db.SaveChangesAsync();
     }
 
-    private async Task HandlePayoutAsync(Payout? stripePayout)
+    private async Task HandlePayoutAsync(StripePayout? stripePayout)
     {
         if (stripePayout == null) return;
         logger.LogInformation("Payout {Id} with status {Status}", stripePayout.Id, stripePayout.Status);
