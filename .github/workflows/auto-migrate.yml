@@ -1,0 +1,83 @@
+name: Generate and Apply Migrations
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, claude/create-barbershop-app-zt9Zn]
+    paths:
+      - 'BarbershopApi/src/BarbershopApi/Models/**'
+      - 'BarbershopApi/src/BarbershopApi/Data/**'
+
+jobs:
+  migrate:
+    name: Generate & Apply EF Core Migrations
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install EF Core CLI
+        run: dotnet tool install --global dotnet-ef
+
+      - name: Add dotnet tools to PATH
+        run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - name: Restore packages
+        working-directory: BarbershopApi/src/BarbershopApi
+        run: dotnet restore
+
+      - name: Build
+        working-directory: BarbershopApi/src/BarbershopApi
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Generate Auth migrations (if none exist)
+        working-directory: BarbershopApi/src/BarbershopApi
+        run: |
+          if [ ! -d "Migrations/Auth" ] || [ -z "$(ls -A Migrations/Auth 2>/dev/null)" ]; then
+            echo "No Auth migrations found — generating..."
+            dotnet ef migrations add InitialCreate --context AuthDbContext --output-dir Migrations/Auth
+          else
+            echo "Auth migrations already exist — skipping generation."
+          fi
+
+      - name: Generate App migrations (if none exist)
+        working-directory: BarbershopApi/src/BarbershopApi
+        run: |
+          if [ ! -d "Migrations/App" ] || [ -z "$(ls -A Migrations/App 2>/dev/null)" ]; then
+            echo "No App migrations found — generating..."
+            dotnet ef migrations add InitialCreate --context AppDbContext --output-dir Migrations/App
+          else
+            echo "App migrations already exist — skipping generation."
+          fi
+
+      - name: Commit generated migrations
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add BarbershopApi/src/BarbershopApi/Migrations/ || true
+          if git diff --staged --quiet; then
+            echo "No new migration files to commit."
+          else
+            git commit -m "Auto-generate EF Core migrations [skip ci]"
+            git push
+          fi
+
+      - name: Apply Auth DB migrations
+        working-directory: BarbershopApi/src/BarbershopApi
+        env:
+          ConnectionStrings__AuthDb: ${{ secrets.BARBERSHOP_AUTH_DB }}
+        run: dotnet ef database update --context AuthDbContext --no-build --configuration Release
+
+      - name: Apply App DB migrations
+        working-directory: BarbershopApi/src/BarbershopApi
+        env:
+          ConnectionStrings__AppDb: ${{ secrets.BARBERSHOP_APP_DB }}
+        run: dotnet ef database update --context AppDbContext --no-build --configuration Release
