@@ -3,7 +3,7 @@ name: Run Database Migrations
 on:
   workflow_dispatch:          # manual trigger from GitHub UI
   push:
-    branches: [main, claude/init-project-setup-lGMDV]
+    branches: [main, claude/fix-bash-startup-error-KzP7u]
     paths:
       - 'BarbershopApi/src/BarbershopApi/Migrations/**'
 
