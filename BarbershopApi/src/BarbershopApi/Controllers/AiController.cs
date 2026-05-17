@@ -6,14 +6,47 @@ using BarbershopApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 
 namespace BarbershopApi.Controllers;
 
 [ApiController]
 [Route("ai")]
 [Authorize]
-public class AiController(AppDbContext db, ITenantService tenant) : ControllerBase
+public class AiController(AppDbContext db, ITenantService tenant, IHttpClientFactory httpClientFactory, IConfiguration config) : ControllerBase
 {
+    private async Task<string?> CallClaude(string userPrompt)
+    {
+        var apiKey = config["Anthropic:ApiKey"];
+        if (string.IsNullOrEmpty(apiKey)) return null;
+
+        var http = httpClientFactory.CreateClient();
+        http.DefaultRequestHeaders.Add("x-api-key", apiKey);
+        http.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+
+        var body = new
+        {
+            model = "claude-sonnet-4-6",
+            max_tokens = 200,
+            messages = new[] { new { role = "user", content = userPrompt } }
+        };
+
+        var json = JsonSerializer.Serialize(body);
+        var res = await http.PostAsync(
+            "https://api.anthropic.com/v1/messages",
+            new StringContent(json, Encoding.UTF8, "application/json"));
+
+        if (!res.IsSuccessStatusCode) return null;
+
+        using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+        return doc.RootElement
+            .GetProperty("content")[0]
+            .GetProperty("text")
+            .GetString();
+    }
+
     [HttpGet("conversations")]
     public async Task<IActionResult> GetConversations([FromQuery] int page = 1, [FromQuery] int limit = 20)
     {
@@ -140,11 +173,47 @@ public class AiController(AppDbContext db, ITenantService tenant) : ControllerBa
     public async Task<IActionResult> GenerateWinback([FromBody] GenerateWinbackRequest req)
     {
         var bizId = tenant.GetBusinessId()!.Value;
-        var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == req.ClientId && c.BusinessId == bizId);
-        if (client == null) return NotFound();
+        var biz = await db.Businesses.FindAsync(bizId);
+        var bizName = biz?.Name ?? "our salon";
+        var bizCity = biz?.City ?? "";
 
-        var draft = $"Hey {client.FirstName}! We miss you at FlatPurse. It's been a while since your last visit. Book this week and enjoy 10% off your next service. Tap here to book: https://book.flatpurse.com";
-        return Ok(new WinbackDraftDto(client.Id, client.FullName, draft));
+        string clientName, lastService;
+        int daysSince;
+        decimal ltv;
+
+        if (req.ClientId == Guid.Empty)
+        {
+            // Free-form generation from front-end supplied data
+            clientName = req.ClientName ?? "there";
+            lastService = req.LastService ?? "your last service";
+            daysSince = req.DaysSince ?? 30;
+            ltv = req.Ltv ?? 0;
+        }
+        else
+        {
+            var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == req.ClientId && c.BusinessId == bizId);
+            if (client == null) return NotFound();
+            clientName = client.FirstName;
+            lastService = "your last service";
+            daysSince = client.LastVisitAt.HasValue
+                ? (int)(DateTime.UtcNow - client.LastVisitAt.Value).TotalDays
+                : 30;
+            ltv = client.LifetimeValue;
+        }
+
+        var prompt = $"Write a warm, personal 2-sentence SMS win-back message for {clientName}, " +
+                     $"who hasn't visited in {daysSince} days. Their last service was {lastService}. " +
+                     $"Their lifetime value is ${ltv:F0}. Offer 15% off their next visit. " +
+                     $"Business name: {bizName}{(bizCity.Length > 0 ? ", " + bizCity : "")}. " +
+                     "Keep it personal and genuine, not salesy. No emojis. Under 160 characters.";
+
+        var draft = await CallClaude(prompt)
+            ?? $"Hi {clientName}! We miss you at {bizName}. Book this week for 15% off your next {lastService}. We'd love to see you back.";
+
+        // Trim to SMS limit
+        if (draft.Length > 160) draft = draft[..157] + "…";
+
+        return Ok(new WinbackDraftDto(req.ClientId, clientName, draft));
     }
 
     [HttpPost("winback/send")]
@@ -153,6 +222,8 @@ public class AiController(AppDbContext db, ITenantService tenant) : ControllerBa
         var bizId = tenant.GetBusinessId()!.Value;
         var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == req.ClientId && c.BusinessId == bizId);
         if (client == null) return NotFound();
+        if (string.IsNullOrEmpty(client.Phone))
+            return BadRequest(new { error = "Client has no phone number on file." });
 
         var log = new Models.Messaging.MessagingLog
         {
@@ -164,8 +235,48 @@ public class AiController(AppDbContext db, ITenantService tenant) : ControllerBa
         };
         db.MessagingLogs.Add(log);
         await db.SaveChangesAsync();
-        // TODO: dispatch via Twilio
-        return Ok(new { message = $"Win-back sent to {client.FullName}." });
+
+        // Dispatch via Twilio (graceful fallback when phone not yet approved)
+        var fromNumber = config["Twilio:PhoneNumber"];
+        if (string.IsNullOrEmpty(fromNumber))
+            return Ok(new { message = $"Win-back queued for {client.FullName} — SMS will send once Twilio number is approved.", sid = (string?)null, status = "pending_number" });
+
+        var (sid, status, error) = await DispatchSms(client.Phone, req.Message);
+        if (error != null)
+            return Ok(new { message = $"Win-back logged but SMS failed: {error}", sid = (string?)null, status = "failed" });
+
+        log.ExternalMessageId = sid;
+        log.DeliveryStatus = status ?? "queued";
+        await db.SaveChangesAsync();
+
+        return Ok(new { message = $"Win-back sent to {client.FullName}.", sid, status });
+    }
+
+    private async Task<(string? Sid, string? Status, string? Error)> DispatchSms(string to, string body)
+    {
+        var sid = config["Twilio:AccountSid"];
+        var token = config["Twilio:AuthToken"];
+        var from = config["Twilio:PhoneNumber"];
+        if (string.IsNullOrEmpty(sid) || string.IsNullOrEmpty(token) || string.IsNullOrEmpty(from))
+            return (null, null, "Twilio not configured");
+
+        var http = httpClientFactory.CreateClient();
+        var creds = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{sid}:{token}"));
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", creds);
+
+        var res = await http.PostAsync(
+            $"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json",
+            new FormUrlEncodedContent([new("To", to), new("From", from), new("Body", body)]));
+
+        using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+        var root = doc.RootElement;
+        if (!res.IsSuccessStatusCode)
+            return (null, null, root.TryGetProperty("message", out var m) ? m.GetString() : "Twilio error");
+
+        return (
+            root.TryGetProperty("sid", out var s) ? s.GetString() : null,
+            root.TryGetProperty("status", out var st) ? st.GetString() : null,
+            null);
     }
 
     [HttpGet("daily-brief")]

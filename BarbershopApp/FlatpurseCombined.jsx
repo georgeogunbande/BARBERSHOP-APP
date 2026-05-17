@@ -910,20 +910,19 @@ function CustomerDetailScreen({ t, onClose, onBook, client }) {
                       (new Date() - new Date(lastVisit?.date || Date.now())) / (1000 * 60 * 60 * 24)
                     );
                     try {
-                      const response = await fetch("https://api.anthropic.com/v1/messages", {
+                      const response = await fetch("/api/ai/winback/generate", {
                         method: "POST",
-                        headers: { "Content-Type": "application/json" },
+                        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("access_token") || ""}` },
                         body: JSON.stringify({
-                          model: "claude-sonnet-4-20250514",
-                          max_tokens: 200,
-                          messages: [{
-                            role: "user",
-                            content: `Write a warm 2-sentence SMS win-back message for ${c.name}, who hasn't visited in ${daysSince} days. Their last service was ${lastService}. Their lifetime value is $${c.ltv}. Offer 15% off their next visit. Business name: Stride Cuts, Edmonton. Keep it personal, not salesy. No emojis.`
-                          }]
+                          client_id: "00000000-0000-0000-0000-000000000000",
+                          client_name: c.name,
+                          last_service: lastService,
+                          days_since: daysSince,
+                          ltv: c.ltv,
                         })
                       });
                       const data = await response.json();
-                      const message = data.content?.[0]?.text || "We'd love to see you back!";
+                      const message = data.message_draft || "We'd love to see you back!";
                       console.log("AI win-back generated:", message);
                       await sendWinBackSMS(c.phone, message);
                     } catch (err) {
@@ -2804,20 +2803,19 @@ function AutoPilotWinBack({ t }) {
     if (state !== "idle") return;
     setState("sending");
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/ai/winback/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("access_token") || ""}` },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 200,
-          messages: [{
-            role: "user",
-            content: `Write a warm 2-sentence SMS win-back message for ${LISA_BRIEF.name}, who hasn't visited in ${LISA_BRIEF.daysSince} days. Her last service was ${LISA_BRIEF.lastService}. Her lifetime value is $${LISA_BRIEF.ltv}. Offer 15% off her next visit. Business name: Stride Cuts, Edmonton. Keep it personal, not salesy. No emojis.`,
-          }],
+          client_id: "00000000-0000-0000-0000-000000000000",
+          client_name: LISA_BRIEF.name,
+          last_service: LISA_BRIEF.lastService,
+          days_since: LISA_BRIEF.daysSince,
+          ltv: LISA_BRIEF.ltv,
         }),
       });
       const data = await res.json();
-      const msg = data.content?.[0]?.text || "We'd love to see you back, Lisa!";
+      const msg = data.message_draft || "We'd love to see you back, Lisa!";
       console.log("✅ AutoPilot win-back generated:", msg);
       await sendWinBackSMS(LISA_BRIEF.phone, msg);
       setPreviewMsg(msg);
@@ -3686,20 +3684,19 @@ function DailyBrief({ t, onClose, onOpenDashboard }) {
                       if (winBackSent) return;
                       setWinBackSent("sending");
                       try {
-                        const res = await fetch("https://api.anthropic.com/v1/messages", {
+                        const res = await fetch("/api/ai/winback/generate", {
                           method: "POST",
-                          headers: { "Content-Type": "application/json" },
+                          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("access_token") || ""}` },
                           body: JSON.stringify({
-                            model: "claude-sonnet-4-20250514",
-                            max_tokens: 200,
-                            messages: [{
-                              role: "user",
-                              content: `Write a warm 2-sentence SMS win-back message for ${LISA_BRIEF.name}, who hasn't visited in ${LISA_BRIEF.daysSince} days. Her last service was ${LISA_BRIEF.lastService}. Her lifetime value is $${LISA_BRIEF.ltv}. Offer 15% off her next visit. Business name: Stride Cuts, Edmonton. Keep it personal, not salesy. No emojis.`,
-                            }],
+                            client_id: "00000000-0000-0000-0000-000000000000",
+                            client_name: LISA_BRIEF.name,
+                            last_service: LISA_BRIEF.lastService,
+                            days_since: LISA_BRIEF.daysSince,
+                            ltv: LISA_BRIEF.ltv,
                           }),
                         });
                         const data = await res.json();
-                        const msg = data.content?.[0]?.text || "We'd love to see you back, Lisa!";
+                        const msg = data.message_draft || "We'd love to see you back, Lisa!";
                         console.log("✅ Daily Brief win-back generated:", msg);
                         await sendWinBackSMS(LISA_BRIEF.phone, msg);
                       } catch (err) {
@@ -4631,20 +4628,19 @@ function EmailBriefScreen({ t, onClose }) {
                               if (winBackSent) return;
                               setWinBackSent("sending");
                               try {
-                                const res = await fetch("https://api.anthropic.com/v1/messages", {
+                                const res = await fetch("/api/ai/winback/generate", {
                                   method: "POST",
-                                  headers: { "Content-Type": "application/json" },
+                                  headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("access_token") || ""}` },
                                   body: JSON.stringify({
-                                    model: "claude-sonnet-4-20250514",
-                                    max_tokens: 200,
-                                    messages: [{
-                                      role: "user",
-                                      content: `Write a warm 2-sentence SMS win-back message for ${LISA_BRIEF.name}, who hasn't visited in ${LISA_BRIEF.daysSince} days. Her last service was ${LISA_BRIEF.lastService}. Her lifetime value is $${LISA_BRIEF.ltv}. Offer 15% off her next visit. Business name: Stride Cuts, Edmonton. Keep it personal, not salesy. No emojis.`,
-                                    }],
+                                    client_id: "00000000-0000-0000-0000-000000000000",
+                                    client_name: LISA_BRIEF.name,
+                                    last_service: LISA_BRIEF.lastService,
+                                    days_since: LISA_BRIEF.daysSince,
+                                    ltv: LISA_BRIEF.ltv,
                                   }),
                                 });
                                 const data = await res.json();
-                                const msg = data.content?.[0]?.text || "We'd love to see you back, Lisa!";
+                                const msg = data.message_draft || "We'd love to see you back, Lisa!";
                                 console.log("✅ Email Brief win-back generated:", msg);
                                 await sendWinBackSMS(LISA_BRIEF.phone, msg);
                               } catch (err) {

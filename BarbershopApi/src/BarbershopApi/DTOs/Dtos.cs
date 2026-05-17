@@ -119,7 +119,7 @@ public record AutoPilotStatsDto(int SlotsFilled, int MessagesSent, int WinbacksT
 
 public record UpdateAiPromptRequest(string Prompt);
 public record ManualReplyRequest(string Message);
-public record GenerateWinbackRequest(Guid ClientId);
+public record GenerateWinbackRequest(Guid ClientId, string? ClientName = null, string? LastService = null, int? DaysSince = null, decimal? Ltv = null);
 public record SendWinbackRequest(Guid ClientId, string Message);
 
 public record AiConversationDto(Guid Id, Guid? ClientId, string? ClientName, MessageChannel Channel, AiConversationStatus Status, int MessageCount, DateTime LastMessageAt);
