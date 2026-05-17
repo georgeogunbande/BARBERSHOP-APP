@@ -151,6 +151,7 @@ public record BriefSettingsDto(TimeOnly DeliveryTime, List<MessageChannel> Chann
 // ── Channels ──────────────────────────────────────────────────────────────────
 
 public record ConnectChannelRequest(string Code, string? RedirectUri);
+public record VerifyEmailDomainRequest(string Domain);
 public record ChannelDto(Guid Id, ChannelType Type, ChannelStatus Status, string? ExternalAccountName, DateTime? ConnectedAt);
 
 // ── Operations ────────────────────────────────────────────────────────────────

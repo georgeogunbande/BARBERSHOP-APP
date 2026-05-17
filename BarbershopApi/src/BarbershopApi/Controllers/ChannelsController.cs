@@ -1,3 +1,6 @@
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 using BarbershopApi.Data;
 using BarbershopApi.DTOs;
 using BarbershopApi.Models.Channels;
@@ -12,7 +15,7 @@ namespace BarbershopApi.Controllers;
 [ApiController]
 [Route("channels")]
 [Authorize]
-public class ChannelsController(AppDbContext db, ITenantService tenant) : ControllerBase
+public class ChannelsController(AppDbContext db, ITenantService tenant, IHttpClientFactory httpFactory, IConfiguration config) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List()
@@ -63,12 +66,29 @@ public class ChannelsController(AppDbContext db, ITenantService tenant) : Contro
         await DisconnectChannelAsync(ChannelType.Google);
 
     [HttpPost("email/verify")]
-    public async Task<IActionResult> VerifyEmailDomain([FromBody] object req)
+    public async Task<IActionResult> VerifyEmailDomain([FromBody] VerifyEmailDomainRequest req)
     {
-        var bizId = tenant.GetBusinessId()!.Value;
-        // TODO: trigger SendGrid domain verification
-        await Task.CompletedTask;
-        return Ok(new { message = "DNS verification records sent to your email. Add them to your domain to complete verification." });
+        var apiKey = config["SendGrid:ApiKey"];
+        if (string.IsNullOrEmpty(apiKey))
+            return StatusCode(502, new { error = "SendGrid not configured." });
+
+        var http = httpFactory.CreateClient();
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+
+        var payload = JsonSerializer.Serialize(new { domain = req.Domain, subdomain = "mail" });
+        var res = await http.PostAsync("https://api.sendgrid.com/v3/whitelabel/domains",
+            new StringContent(payload, Encoding.UTF8, "application/json"));
+
+        if (!res.IsSuccessStatusCode)
+            return StatusCode(502, new { error = "Failed to initiate domain verification with SendGrid." });
+
+        var body = await res.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(body);
+        return Ok(new
+        {
+            message = "Domain verification initiated. Add the DNS records to your domain registrar to complete setup.",
+            records = doc.RootElement
+        });
     }
 
     [HttpGet("sms/number")]
@@ -90,7 +110,58 @@ public class ChannelsController(AppDbContext db, ITenantService tenant) : Contro
     private async Task<IActionResult> ConnectChannelAsync(ChannelType type, ConnectChannelRequest req)
     {
         var bizId = tenant.GetBusinessId()!.Value;
-        // TODO: exchange OAuth code for access token via provider API
+
+        string? accessToken = null;
+        string? accountName = null;
+
+        if (type is ChannelType.Instagram or ChannelType.Facebook or ChannelType.WhatsApp)
+        {
+            var clientId = config["Meta:AppId"];
+            var clientSecret = config["Meta:AppSecret"];
+            var redirectUri = req.RedirectUri ?? config["Meta:RedirectUri"];
+
+            if (!string.IsNullOrEmpty(clientId) && !string.IsNullOrEmpty(clientSecret))
+            {
+                var http = httpFactory.CreateClient();
+                var tokenUrl = $"https://graph.facebook.com/v19.0/oauth/access_token" +
+                    $"?client_id={clientId}&client_secret={clientSecret}" +
+                    $"&redirect_uri={Uri.EscapeDataString(redirectUri ?? "")}&code={req.Code}";
+
+                var res = await http.GetAsync(tokenUrl);
+                if (res.IsSuccessStatusCode)
+                {
+                    var json = await res.Content.ReadAsStringAsync();
+                    using var doc = JsonDocument.Parse(json);
+                    accessToken = doc.RootElement.TryGetProperty("access_token", out var t) ? t.GetString() : null;
+                }
+            }
+        }
+        else if (type == ChannelType.Google)
+        {
+            var clientId = config["Google:ClientId"];
+            var clientSecret = config["Google:ClientSecret"];
+            var redirectUri = req.RedirectUri ?? config["Google:RedirectUri"];
+
+            if (!string.IsNullOrEmpty(clientId) && !string.IsNullOrEmpty(clientSecret))
+            {
+                var http = httpFactory.CreateClient();
+                var form = new FormUrlEncodedContent([
+                    new("code", req.Code),
+                    new("client_id", clientId),
+                    new("client_secret", clientSecret),
+                    new("redirect_uri", redirectUri ?? ""),
+                    new("grant_type", "authorization_code")
+                ]);
+                var res = await http.PostAsync("https://oauth2.googleapis.com/token", form);
+                if (res.IsSuccessStatusCode)
+                {
+                    var json = await res.Content.ReadAsStringAsync();
+                    using var doc = JsonDocument.Parse(json);
+                    accessToken = doc.RootElement.TryGetProperty("access_token", out var t) ? t.GetString() : null;
+                }
+            }
+        }
+
         var channel = await db.Channels.FirstOrDefaultAsync(c => c.BusinessId == bizId && c.Type == type);
         if (channel == null)
         {
@@ -98,7 +169,8 @@ public class ChannelsController(AppDbContext db, ITenantService tenant) : Contro
             db.Channels.Add(channel);
         }
         channel.Status = ChannelStatus.Connected;
-        channel.AccessToken = $"access_token_placeholder_{req.Code}";
+        channel.AccessToken = accessToken ?? $"pending_{req.Code}";
+        channel.ExternalAccountName = accountName;
         channel.ConnectedAt = DateTime.UtcNow;
         channel.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();

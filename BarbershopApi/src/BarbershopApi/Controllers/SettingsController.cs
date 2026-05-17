@@ -1,6 +1,7 @@
 using BarbershopApi.Data;
 using BarbershopApi.DTOs;
 using BarbershopApi.Models.Business;
+using BarbershopApi.Models.Enums;
 using BarbershopApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -75,7 +76,55 @@ public class SettingsController(AppDbContext db, ITenantService tenant, IConfigu
         var sub = await db.Subscriptions.FirstOrDefaultAsync(s => s.BusinessId == bizId);
         if (sub == null) return NotFound();
 
-        // TODO: create/update Stripe subscription
+        StripeConfiguration.ApiKey = config["Stripe:SecretKey"];
+
+        if (string.IsNullOrEmpty(sub.StripeCustomerId))
+        {
+            var biz = await db.Businesses.FindAsync(bizId);
+            var customerSvc = new CustomerService();
+            var customer = await customerSvc.CreateAsync(new CustomerCreateOptions
+            {
+                Name = biz?.Name,
+                Metadata = new Dictionary<string, string> { ["business_id"] = bizId.ToString() }
+            });
+            sub.StripeCustomerId = customer.Id;
+        }
+
+        var priceId = req.Plan switch
+        {
+            SubscriptionPlan.Starter => config["Stripe:StarterPriceId"],
+            SubscriptionPlan.Growth  => config["Stripe:GrowthPriceId"],
+            SubscriptionPlan.Scale   => config["Stripe:ScalePriceId"],
+            _ => null
+        };
+
+        if (string.IsNullOrEmpty(priceId))
+            return BadRequest(new { error = $"Price ID for plan '{req.Plan}' is not configured." });
+
+        var subSvc = new SubscriptionService();
+        if (!string.IsNullOrEmpty(sub.StripeSubscriptionId))
+        {
+            var existing = await subSvc.GetAsync(sub.StripeSubscriptionId);
+            await subSvc.UpdateAsync(sub.StripeSubscriptionId, new SubscriptionUpdateOptions
+            {
+                Items = [new SubscriptionItemOptions { Id = existing.Items.Data[0].Id, Price = priceId }],
+                ProrationBehavior = "create_prorations"
+            });
+        }
+        else
+        {
+            var created = await subSvc.CreateAsync(new SubscriptionCreateOptions
+            {
+                Customer = sub.StripeCustomerId,
+                Items = [new SubscriptionItemOptions { Price = priceId }],
+                TrialEnd = sub.IsTrialing && sub.TrialEndsAt > DateTime.UtcNow
+                    ? sub.TrialEndsAt
+                    : null
+            });
+            sub.StripeSubscriptionId = created.Id;
+            sub.CurrentPeriodEnd = created.CurrentPeriodEnd;
+        }
+
         sub.Plan = req.Plan;
         sub.IsTrialing = false;
         await db.SaveChangesAsync();
@@ -90,7 +139,16 @@ public class SettingsController(AppDbContext db, ITenantService tenant, IConfigu
         var sub = await db.Subscriptions.FirstOrDefaultAsync(s => s.BusinessId == bizId);
         if (sub == null) return NotFound();
 
-        // TODO: cancel Stripe subscription
+        if (!string.IsNullOrEmpty(sub.StripeSubscriptionId))
+        {
+            StripeConfiguration.ApiKey = config["Stripe:SecretKey"];
+            var subSvc = new SubscriptionService();
+            await subSvc.UpdateAsync(sub.StripeSubscriptionId, new SubscriptionUpdateOptions
+            {
+                CancelAtPeriodEnd = true
+            });
+        }
+
         sub.CancelledAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         return Ok(new { message = "Subscription cancelled. Your access continues until the end of the billing period.", cancelledAt = sub.CancelledAt });
