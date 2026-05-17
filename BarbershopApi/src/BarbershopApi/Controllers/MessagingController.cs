@@ -1,6 +1,5 @@
 using System.Net.Http.Headers;
 using System.Text;
-using System.Text.Json;
 using BarbershopApi.Data;
 using BarbershopApi.DTOs;
 using BarbershopApi.Models.Enums;
@@ -15,7 +14,7 @@ namespace BarbershopApi.Controllers;
 [ApiController]
 [Route("messaging")]
 [Authorize]
-public class MessagingController(AppDbContext db, ITenantService tenant, IHttpClientFactory httpClientFactory, IConfiguration config) : ControllerBase
+public class MessagingController(AppDbContext db, ITenantService tenant, ISmsService smsService, IEmailService emailService, IHttpClientFactory httpClientFactory, IConfiguration config) : ControllerBase
 {
     // Rate limit: max 10 SMS per business per hour (in-memory; replace with Redis in prod)
     private static readonly Dictionary<Guid, (int Count, DateTime Window)> _smsRateLimit = [];
@@ -40,36 +39,6 @@ public class MessagingController(AppDbContext db, ITenantService tenant, IHttpCl
         }
     }
 
-    private async Task<(string? Sid, string? Status, string? Error)> DispatchTwilioSms(string to, string body)
-    {
-        var sid = config["Twilio:AccountSid"];
-        var token = config["Twilio:AuthToken"];
-        var from = config["Twilio:PhoneNumber"];
-        if (string.IsNullOrEmpty(sid) || string.IsNullOrEmpty(token) || string.IsNullOrEmpty(from))
-            return (null, null, "Twilio credentials not configured");
-
-        var http = httpClientFactory.CreateClient();
-        var url = $"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json";
-        var credentials = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{sid}:{token}"));
-        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", credentials);
-
-        var form = new FormUrlEncodedContent([
-            new("To", to), new("From", from), new("Body", body)
-        ]);
-
-        var res = await http.PostAsync(url, form);
-        var json = await res.Content.ReadAsStringAsync();
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-
-        if (!res.IsSuccessStatusCode)
-            return (null, null, root.TryGetProperty("message", out var msg) ? msg.GetString() : "Twilio error");
-
-        var messageSid = root.TryGetProperty("sid", out var sidProp) ? sidProp.GetString() : null;
-        var status = root.TryGetProperty("status", out var statusProp) ? statusProp.GetString() : null;
-        return (messageSid, status, null);
-    }
-
     [HttpPost("sms/send")]
     [AllowAnonymous]
     public async Task<IActionResult> SendSmsDirect([FromBody] SendSmsDirectRequest req)
@@ -90,7 +59,7 @@ public class MessagingController(AppDbContext db, ITenantService tenant, IHttpCl
         if (!CheckSmsRateLimit(bizId))
             return StatusCode(429, new { error = "Rate limit exceeded — max 10 SMS per hour" });
 
-        var (sid, status, error) = await DispatchTwilioSms(phone, req.Body);
+        var (sid, status, error) = await smsService.SendAsync(phone, req.Body);
         if (error != null) return StatusCode(502, new { error });
 
         var log = new MessagingLog
@@ -120,7 +89,7 @@ public class MessagingController(AppDbContext db, ITenantService tenant, IHttpCl
         await db.SaveChangesAsync();
 
         if (!string.IsNullOrEmpty(client.Phone))
-            await DispatchTwilioSms(client.Phone, req.Message);
+            await smsService.SendAsync(client.Phone, req.Message);
 
         return Ok(new { message = "SMS sent.", id = log.Id });
     }
@@ -135,7 +104,10 @@ public class MessagingController(AppDbContext db, ITenantService tenant, IHttpCl
         var log = new MessagingLog { BusinessId = bizId, ClientId = req.ClientId, Channel = MessageChannel.Email, To = client.Email, Body = req.Body };
         db.MessagingLogs.Add(log);
         await db.SaveChangesAsync();
-        // TODO: dispatch via SendGrid
+
+        if (!string.IsNullOrEmpty(client.Email))
+            await emailService.SendAsync(client.Email, client.FullName, req.Subject ?? "Message from your barber", req.Body);
+
         return Ok(new { message = "Email sent.", id = log.Id });
     }
 
@@ -161,8 +133,12 @@ public class MessagingController(AppDbContext db, ITenantService tenant, IHttpCl
 
         db.MessagingLogs.AddRange(logs);
         await db.SaveChangesAsync();
-        // TODO: dispatch all via Twilio
-        return Ok(new { message = $"Blast queued for {logs.Count} clients." });
+
+        foreach (var log in logs)
+            if (!string.IsNullOrEmpty(log.To))
+                await smsService.SendAsync(log.To, req.Message);
+
+        return Ok(new { message = $"Blast sent to {logs.Count} clients." });
     }
 
     [HttpGet("templates")]

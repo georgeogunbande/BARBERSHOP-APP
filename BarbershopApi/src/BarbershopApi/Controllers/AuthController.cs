@@ -20,7 +20,8 @@ public class AuthController(
     AppDbContext appDb,
     IJwtService jwt,
     ITenantService tenant,
-    IConfiguration config) : ControllerBase
+    IConfiguration config,
+    IEmailService emailService) : ControllerBase
 {
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest req)
@@ -76,7 +77,10 @@ public class AuthController(
         if (user == null) return Ok(new { message = "If that email exists, a magic link has been sent." });
 
         var token = await userManager.GenerateUserTokenAsync(user, "MagicLinkProvider", "magic-link-login");
-        // TODO: send email with magic link containing token
+        var link = $"https://app.flatpurse.com/auth/magic?token={Uri.EscapeDataString(token)}&email={Uri.EscapeDataString(req.Email)}";
+        await emailService.SendAsync(req.Email, $"{user.FirstName} {user.LastName}",
+            "Your magic sign-in link",
+            $"<p>Hi {user.FirstName},</p><p><a href='{link}'>Click here to sign in</a></p><p>This link expires in 15 minutes.</p>");
         return Ok(new { message = "Magic link sent to your email." });
     }
 
@@ -132,7 +136,10 @@ public class AuthController(
         if (user != null)
         {
             var token = await userManager.GeneratePasswordResetTokenAsync(user);
-            // TODO: send reset email
+            var link = $"https://app.flatpurse.com/auth/reset-password?token={Uri.EscapeDataString(token)}&email={Uri.EscapeDataString(req.Email)}";
+            await emailService.SendAsync(req.Email, $"{user.FirstName} {user.LastName}",
+                "Reset your password",
+                $"<p>Hi {user.FirstName},</p><p><a href='{link}'>Click here to reset your password</a></p><p>This link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>");
         }
         return Ok(new { message = "If that email exists, a reset link has been sent." });
     }
@@ -197,7 +204,11 @@ public class AuthController(
 
         authDb.InviteTokens.Add(invite);
         await authDb.SaveChangesAsync();
-        // TODO: send invite email
+
+        var link = $"https://app.flatpurse.com/auth/accept-invite/{invite.Token}";
+        await emailService.SendAsync(req.Email, req.Email,
+            "You've been invited to FlatPurse",
+            $"<p>You've been invited to join a barbershop on FlatPurse as <strong>{req.Role}</strong>.</p><p><a href='{link}'>Accept Invitation</a></p><p>This invite expires in 7 days.</p>");
 
         return Ok(new { message = $"Invitation sent to {req.Email}." });
     }

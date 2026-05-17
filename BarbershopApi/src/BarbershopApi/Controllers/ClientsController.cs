@@ -13,7 +13,7 @@ namespace BarbershopApi.Controllers;
 [ApiController]
 [Route("clients")]
 [Authorize]
-public class ClientsController(AppDbContext db, ITenantService tenant) : ControllerBase
+public class ClientsController(AppDbContext db, ITenantService tenant, ISmsService smsService, IEmailService emailService, IAutoPilotService autoPilot) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List(
@@ -176,7 +176,12 @@ public class ClientsController(AppDbContext db, ITenantService tenant) : Control
         };
         db.MessagingLogs.Add(log);
         await db.SaveChangesAsync();
-        // TODO: dispatch via Twilio/SendGrid
+
+        if (req.Channel == MessageChannel.SMS && !string.IsNullOrEmpty(client.Phone))
+            await smsService.SendAsync(client.Phone, req.Body);
+        else if (req.Channel == MessageChannel.Email && !string.IsNullOrEmpty(client.Email))
+            await emailService.SendAsync(client.Email, client.FullName, req.Subject ?? "Message from your barber", req.Body);
+
         return Ok(new { message = "Message sent.", id = log.Id });
     }
 
@@ -249,7 +254,7 @@ public class ClientsController(AppDbContext db, ITenantService tenant) : Control
         var bizId = tenant.GetBusinessId()!.Value;
         var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == id && c.BusinessId == bizId);
         if (client == null) return NotFound();
-        // TODO: enqueue AutoPilot winback job
+        await autoPilot.TriggerWinbackAsync(bizId, client.Id);
         return Ok(new { message = $"Win-back flow triggered for {client.FullName}." });
     }
 

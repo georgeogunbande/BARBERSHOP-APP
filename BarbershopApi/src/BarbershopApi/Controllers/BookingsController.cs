@@ -4,6 +4,7 @@ using BarbershopApi.Models.Bookings;
 using BarbershopApi.Models.Enums;
 using static BarbershopApi.Models.Enums.DepositStatus;
 using BarbershopApi.Services;
+#pragma warning disable CS4014 // fire-and-forget AutoPilot triggers
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -13,7 +14,7 @@ namespace BarbershopApi.Controllers;
 [ApiController]
 [Route("bookings")]
 [Authorize]
-public class BookingsController(AppDbContext db, ITenantService tenant) : ControllerBase
+public class BookingsController(AppDbContext db, ITenantService tenant, IAutoPilotService autoPilot) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List(
@@ -109,7 +110,7 @@ public class BookingsController(AppDbContext db, ITenantService tenant) : Contro
         booking.Status = BookingStatus.Cancelled;
         booking.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
-        // TODO: trigger cancellation_alert AutoPilot flow
+        _ = autoPilot.TriggerCancellationAlertAsync(booking.BusinessId, booking.Id, booking.ClientId);
         return NoContent();
     }
 
@@ -132,7 +133,7 @@ public class BookingsController(AppDbContext db, ITenantService tenant) : Contro
         }
 
         await db.SaveChangesAsync();
-        // TODO: trigger review_request AutoPilot flow (24hr delay)
+        _ = autoPilot.TriggerReviewRequestAsync(booking.BusinessId, booking.Id, booking.ClientId);
         return Ok(booking);
     }
 

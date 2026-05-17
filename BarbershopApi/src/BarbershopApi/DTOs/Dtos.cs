@@ -59,7 +59,7 @@ public record CreateClientRequest(string FirstName, string LastName, string? Ema
 public record UpdateClientRequest(string? FirstName, string? LastName, string? Email, string? Phone, DateTime? DateOfBirth, List<ClientTag>? Tags, int? RebookIntervalDays);
 public record AddNoteRequest(string Content, bool IsPinned = false);
 public record UpdateNoteRequest(string? Content, bool? IsPinned);
-public record SendMessageRequest(string Body, MessageChannel Channel);
+public record SendMessageRequest(string Body, MessageChannel Channel, string? Subject = null);
 
 public record ClientDto(Guid Id, string FirstName, string LastName, string? Email, string? Phone, string? AvatarUrl, List<ClientTag> Tags, ChurnRisk ChurnRisk, decimal LifetimeValue, int VisitCount, DateTime? LastVisitAt, DateTime CreatedAt);
 public record ClientNoteDto(Guid Id, string Content, bool IsPinned, string AuthorUserId, DateTime CreatedAt, DateTime UpdatedAt);
