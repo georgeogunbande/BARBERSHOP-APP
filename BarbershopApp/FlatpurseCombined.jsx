@@ -818,7 +818,7 @@ function CustomerDetailScreen({ t, onClose, onBook, client }) {
                     const lastVisit = c.visits_data?.[0];
                     const lastService = lastVisit?.service || "their last service";
                     const daysSince = Math.floor(
-                      (Date.now() - new Date(lastVisit?.date + " 2025").getTime()) / (1000 * 60 * 60 * 24)
+                      (new Date() - new Date(lastVisit?.date || Date.now())) / (1000 * 60 * 60 * 24)
                     );
                     try {
                       const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -829,15 +829,16 @@ function CustomerDetailScreen({ t, onClose, onBook, client }) {
                           max_tokens: 200,
                           messages: [{
                             role: "user",
-                            content: `Write a warm 2-sentence SMS win-back message for ${c.name}, who hasn't visited in ${daysSince} days. Their last service was ${lastService}. Their lifetime value is $${c.ltv}. Offer 15% off their next visit. Business name: Stride Cuts, Edmonton. Keep it personal, not salesy. No emojis. No quotes around the message.`
+                            content: `Write a warm 2-sentence SMS win-back message for ${c.name}, who hasn't visited in ${daysSince} days. Their last service was ${lastService}. Their lifetime value is $${c.ltv}. Offer 15% off their next visit. Business name: Stride Cuts, Edmonton. Keep it personal, not salesy. No emojis.`
                           }]
                         })
                       });
                       const data = await response.json();
-                      const message = data.content?.[0]?.text || "";
-                      console.log("✅ AI win-back for", c.name, "→", message);
+                      const message = data.content?.[0]?.text || "We'd love to see you back!";
+                      console.log("AI win-back generated:", message);
+                      await sendWinBackSMS(c.phone, message);
                     } catch (err) {
-                      console.error("Win-back API error:", err);
+                      console.error("Win-back generation failed:", err);
                     }
                     setWinbackSent(true);
                   }}
@@ -853,7 +854,7 @@ function CustomerDetailScreen({ t, onClose, onBook, client }) {
                   {winbackSent === true
                     ? "✓ Win-back sent"
                     : winbackSent === "sending"
-                    ? "Generating message..."
+                    ? "Generating…"
                     : "Send win-back now →"}
                 </button>
               )}
@@ -2279,6 +2280,16 @@ function HomePopulated({ t }) {
           ))}
         </div>
       </div>
+      {/* ── Trust badge — marketplace-free promise ── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, padding: "10px 16px", borderRadius: 12, background: t.inputBg, border: `1px solid ${t.border}`, marginBottom: 12 }}>
+        {["No marketplace", "No commission", "Your clients, always"].map((txt, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            {i > 0 && <div style={{ width: 3, height: 3, borderRadius: "50%", background: t.muted, opacity: 0.4 }} />}
+            <span style={{ fontSize: 10, fontWeight: 700, color: t.muted, whiteSpace: "nowrap" }}>{txt}</span>
+          </div>
+        ))}
+      </div>
+
       <button style={{ width: "100%", padding: "16px 20px", border: `1.5px solid ${t.border}`, borderRadius: 16, fontSize: 15, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 20, fontFamily: f, background: t.card, color: t.text, boxShadow: t.shadow }}>
         <span style={{ color: t.accent }}>✦</span>Fill 4 empty slots now (+$280)
       </button>
@@ -2552,6 +2563,46 @@ const LISA_BRIEF = {
   lastService: "Balayage",
 };
 
+// ── SMS send helper — wire your Twilio credentials here ──────────
+// In production: move ACCOUNT_SID + AUTH_TOKEN to a server-side
+// edge function (Vercel/Azure Function) so they're never in the client.
+// For now this calls your backend endpoint which proxies to Twilio.
+async function sendWinBackSMS(toPhone, message) {
+  console.log("📱 Sending win-back SMS to", toPhone);
+  console.log("   Message:", message);
+  try {
+    // ── Option A: Call your own backend endpoint ──
+    // Uncomment when backend is ready:
+    // const res = await fetch("/api/sms/send", {
+    //   method: "POST",
+    //   headers: { "Content-Type": "application/json" },
+    //   body: JSON.stringify({ to: toPhone, body: message }),
+    // });
+    // const data = await res.json();
+    // console.log("✅ SMS sent:", data.sid);
+    // return data.sid;
+
+    // ── Option B: Twilio direct (demo only — never in production) ──
+    // const ACCOUNT_SID = "ACxxxxxxxx";
+    // const AUTH_TOKEN  = "xxxxxxxx";
+    // const FROM_NUMBER = "+1780XXXXXXX";
+    // const res = await fetch(
+    //   `https://api.twilio.com/2010-04-01/Accounts/${ACCOUNT_SID}/Messages.json`,
+    //   { method:"POST", headers:{ "Authorization":"Basic "+btoa(ACCOUNT_SID+":"+AUTH_TOKEN), "Content-Type":"application/x-www-form-urlencoded" },
+    //     body: new URLSearchParams({ To:toPhone, From:FROM_NUMBER, Body:message }) }
+    // );
+    // const data = await res.json();
+    // console.log("✅ Twilio response:", data.sid || data.message);
+
+    // ── Current state: log + mark as sent (uncomment above when ready) ──
+    console.log("✅ Win-back ready to send — wire Twilio above to go live");
+    return "demo_sid_" + Date.now();
+  } catch (err) {
+    console.error("❌ SMS send failed:", err);
+    throw err;
+  }
+}
+
 // ── AutoPilotWinBack — standalone card rendered inside AutoPilotScreen ──
 function AutoPilotWinBack({ t }) {
   const [state, setState] = useState("idle"); // idle | sending | sent | error
@@ -2576,6 +2627,7 @@ function AutoPilotWinBack({ t }) {
       const data = await res.json();
       const msg = data.content?.[0]?.text || "We'd love to see you back, Lisa!";
       console.log("✅ AutoPilot win-back generated:", msg);
+      await sendWinBackSMS(LISA_BRIEF.phone, msg);
       setPreviewMsg(msg);
       setState("sent");
     } catch (err) {
@@ -3440,6 +3492,7 @@ function DailyBrief({ t, onClose, onOpenDashboard }) {
                         const data = await res.json();
                         const msg = data.content?.[0]?.text || "We'd love to see you back, Lisa!";
                         console.log("✅ Daily Brief win-back generated:", msg);
+                        await sendWinBackSMS(LISA_BRIEF.phone, msg);
                       } catch (err) {
                         console.error("Daily Brief win-back failed:", err);
                       }
@@ -3785,6 +3838,7 @@ function SettingsRow({ icon, title, sub, t, onClick }) {
 }
 
 function SettingsHubScreen({ t, onClose, onOpenBusiness, onOpenServices }) {
+  const [showSupport, setShowSupport] = useState(false);
   const shopRows = [
     { title: "Business profile", sub: "Name, address, booking page brand", onClick: onOpenBusiness, icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.orangeText} strokeWidth="2" strokeLinecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
     { title: "Services & pricing", sub: "12 services · edit anytime", onClick: onOpenServices, icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.pinkText} strokeWidth="2" strokeLinecap="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg> },
@@ -3799,7 +3853,7 @@ function SettingsHubScreen({ t, onClose, onOpenBusiness, onOpenServices }) {
   const acctRows = [
     { title: "Billing", sub: "$49/mo · next on Jun 5", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.sub} strokeWidth="2" strokeLinecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg> },
     { title: "Notifications", sub: "Push, email, SMS", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.sub} strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg> },
-    { title: "Help & support", sub: "Reach George directly", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.sub} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> },
+    { title: "Help & support", sub: "< 2hr response · Edmonton team", onClick: () => setShowSupport(true), icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.sub} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> },
   ];
   const Section = ({ label, rows }) => (
     <>
@@ -3836,8 +3890,76 @@ function SettingsHubScreen({ t, onClose, onOpenBusiness, onOpenServices }) {
         <Section label="YOUR SHOP" rows={shopRows} />
         <Section label="AUTOPILOT" rows={apRows} />
         <Section label="ACCOUNT" rows={acctRows} />
+        {/* ── Your data is yours — trust section ── */}
+        <div style={{ borderRadius: 14, background: t.accentSoft, border: `1px solid ${t.accent}20`, padding: "14px 16px", marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.4, color: t.accentText, marginBottom: 8 }}>YOUR DATA IS YOURS</div>
+          <div style={{ fontSize: 13, color: t.text, lineHeight: 1.65, marginBottom: 10 }}>
+            No marketplace. No commission on your clients. FlatPurse Flow never sells your data or shows your clients competing salons.
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => {
+                const headers = ["Name","Phone","Email","LTV","Visits","Last Visit","Tags"];
+                const rows = CLIENTS_DB.map(c => [c.name, c.phone, c.email, c.ltv, c.visits, c.lastVisit, (c.tags||[]).join("|")]);
+                const csv = [headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,"'")}`).join(",")).join(String.fromCharCode(10));
+                const blob = new Blob([csv],{type:"text/csv"});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href=url; a.download="flatpurse-clients.csv"; a.click();
+                URL.revokeObjectURL(url);
+              }}
+              style={{ flex: 1, padding: "9px 0", borderRadius: 10, background: t.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: f, fontSize: 12, fontWeight: 700 }}>
+              ↓ Export all clients
+            </button>
+            <button style={{ flex: 1, padding: "9px 0", borderRadius: 10, background: t.card, color: t.text, border: `1px solid ${t.border}`, cursor: "pointer", fontFamily: f, fontSize: 12, fontWeight: 700 }}>
+              View privacy policy
+            </button>
+          </div>
+        </div>
+
         <button style={{ width: "100%", padding: "15px 0", borderRadius: 14, background: t.card, border: `1px solid ${t.border}`, fontSize: 15, fontWeight: 600, color: t.text, cursor: "pointer", fontFamily: f }}>Sign out</button>
       </div>
+
+      {/* ── Support overlay ── */}
+      {showSupport && (
+        <div style={{ position: "absolute", inset: 0, zIndex: 20, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "flex-end", borderRadius: 41, overflow: "hidden" }}>
+          <div style={{ width: "100%", background: t.bg, borderRadius: "22px 22px 0 0", padding: "20px 22px 36px", animation: "slideUp 0.28s cubic-bezier(0.32,0.72,0,1) both" }}>
+            <div style={{ width: 40, height: 4, borderRadius: 2, background: t.border, margin: "0 auto 18px" }} />
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+              <div style={{ width: 46, height: 46, borderRadius: 23, background: t.accent, color: "#fff", fontSize: 16, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>GO</div>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: t.text }}>George Ogunbande</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#22C55E" }} />
+                  <span style={{ fontSize: 12, color: t.greenText, fontWeight: 600 }}>Online now · Edmonton, AB</span>
+                </div>
+              </div>
+            </div>
+            {/* SLA promise */}
+            <div style={{ padding: "12px 16px", borderRadius: 12, background: t.greenBg, border: `1px solid ${t.green}20`, marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: t.greenText, marginBottom: 3 }}>Under 2-hour response · business hours</div>
+              <div style={{ fontSize: 12, color: t.sub }}>North American team. No offshore tickets. No chatbots. Real humans who built this product.</div>
+            </div>
+            {/* Contact options */}
+            {[
+              { icon: "💬", label: "WhatsApp George", sub: "+1 (780) XXX-XXXX", bg: "#25D366", color: "#fff" },
+              { icon: "✉️", label: "Email support", sub: "hello@flatpurse.com", bg: t.accentSoft, color: t.accentText },
+              { icon: "📅", label: "Book a 15-min call", sub: "calendly.com/flatpurse", bg: t.card, color: t.text },
+            ].map((c, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderRadius: 13, background: c.bg, border: `1px solid ${t.border}`, marginBottom: 8, cursor: "pointer" }}>
+                <span style={{ fontSize: 20 }}>{c.icon}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: c.color }}>{c.label}</div>
+                  <div style={{ fontSize: 12, color: t.sub }}>{c.sub}</div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={t.dim} strokeWidth="2.5" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
+              </div>
+            ))}
+            <button onClick={() => setShowSupport(false)} style={{ width: "100%", marginTop: 10, padding: "13px 0", background: "none", border: "none", cursor: "pointer", fontSize: 14, color: t.muted, fontFamily: f }}>Close</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -4179,6 +4301,7 @@ function EmailBriefScreen({ t, onClose }) {
                                 const data = await res.json();
                                 const msg = data.content?.[0]?.text || "We'd love to see you back, Lisa!";
                                 console.log("✅ Email Brief win-back generated:", msg);
+                                await sendWinBackSMS(LISA_BRIEF.phone, msg);
                               } catch (err) {
                                 console.error("Email Brief win-back failed:", err);
                               }
@@ -4304,9 +4427,31 @@ function FlatpurseApp({
           <div style={{ fontSize: 26, fontWeight: 800, color: t.text, letterSpacing: -0.5 }}>Clients</div>
           <div style={{ fontSize: 13, color: t.sub, marginTop: 3 }}>{CLIENTS_DB.length} total · tap to view profile</div>
         </div>
-        <button onClick={() => setShowNewAppointment(true)} style={{ width: 36, height: 36, borderRadius: 18, background: t.accent, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* Export CSV — your data, always */}
+          <button
+            onClick={() => {
+              const headers = ["Name","Phone","Email","LTV","Visits","Avg Spend","Last Visit","Tags"];
+              const rows = CLIENTS_DB.map(c => [c.name, c.phone, c.email, c.ltv, c.visits, c.avgSpend, c.lastVisit, (c.tags||[]).join("|")]);
+              const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,"'")}`).join(",")).join(String.fromCharCode(10));
+              const blob = new Blob([csv], { type: "text/csv" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url; a.download = "flatpurse-clients.csv"; a.click();
+              URL.revokeObjectURL(url);
+            }}
+            title="Export all clients — your data, always"
+            style={{ width: 34, height: 34, borderRadius: 10, background: t.card, border: `1px solid ${t.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={t.sub} strokeWidth="2.2" strokeLinecap="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </button>
+          <button onClick={() => setShowNewAppointment(true)} style={{ width: 36, height: 36, borderRadius: 18, background: t.accent, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
       </div>
     );
     if (tab === "bookings") return (
