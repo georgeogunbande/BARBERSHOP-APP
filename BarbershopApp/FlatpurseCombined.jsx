@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { api, setToken, getToken, clearToken } from './lib/api.js';
+import { login, logout, getMe } from './lib/auth.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // FLATPURSE FLOW — FULL APP
@@ -910,17 +912,13 @@ function CustomerDetailScreen({ t, onClose, onBook, client }) {
                       (new Date() - new Date(lastVisit?.date || Date.now())) / (1000 * 60 * 60 * 24)
                     );
                     try {
-                      const response = await fetch("/api/ai/winback/generate", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("access_token") || ""}` },
-                        body: JSON.stringify({
-                          client_id: "00000000-0000-0000-0000-000000000000",
-                          client_name: c.name,
-                          last_service: lastService,
-                          days_since: daysSince,
+                      const response = await api.post('/ai/winback/generate', {
+                          clientId: "00000000-0000-0000-0000-000000000000",
+                          clientName: c.name,
+                          lastService: lastService,
+                          daysSince: daysSince,
                           ltv: c.ltv,
-                        })
-                      });
+                        });
                       const data = await response.json();
                       const message = data.message_draft || "We'd love to see you back!";
                       console.log("AI win-back generated:", message);
@@ -2779,11 +2777,7 @@ async function sendWinBackSMS(toPhone, message) {
   console.log("   Message:", message);
   try {
     // ── Option A: backend endpoint (Twilio via server) ──
-    const res = await fetch("/api/messaging/sms/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to: toPhone, body: message }),
-    });
+    const res = await api.post('/messaging/sms/send', { to: toPhone, body: message });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "SMS send failed");
     console.log("✅ SMS sent:", data.sid);
@@ -2803,19 +2797,15 @@ function AutoPilotWinBack({ t }) {
     if (state !== "idle") return;
     setState("sending");
     try {
-      const res = await fetch("/api/ai/winback/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("access_token") || ""}` },
-        body: JSON.stringify({
-          client_id: "00000000-0000-0000-0000-000000000000",
-          client_name: LISA_BRIEF.name,
-          last_service: LISA_BRIEF.lastService,
-          days_since: LISA_BRIEF.daysSince,
+      const res = await api.post('/ai/winback/generate', {
+          clientId: "00000000-0000-0000-0000-000000000000",
+          clientName: LISA_BRIEF.name,
+          lastService: LISA_BRIEF.lastService,
+          daysSince: LISA_BRIEF.daysSince,
           ltv: LISA_BRIEF.ltv,
-        }),
-      });
+        });
       const data = await res.json();
-      const msg = data.message_draft || "We'd love to see you back, Lisa!";
+      const msg = data.messageDraft || data.message_draft || "We'd love to see you back, Lisa!";
       console.log("✅ AutoPilot win-back generated:", msg);
       await sendWinBackSMS(LISA_BRIEF.phone, msg);
       setPreviewMsg(msg);
@@ -3684,19 +3674,15 @@ function DailyBrief({ t, onClose, onOpenDashboard }) {
                       if (winBackSent) return;
                       setWinBackSent("sending");
                       try {
-                        const res = await fetch("/api/ai/winback/generate", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("access_token") || ""}` },
-                          body: JSON.stringify({
-                            client_id: "00000000-0000-0000-0000-000000000000",
-                            client_name: LISA_BRIEF.name,
-                            last_service: LISA_BRIEF.lastService,
-                            days_since: LISA_BRIEF.daysSince,
+                        const res = await api.post('/ai/winback/generate', {
+                            clientId: "00000000-0000-0000-0000-000000000000",
+                            clientName: LISA_BRIEF.name,
+                            lastService: LISA_BRIEF.lastService,
+                            daysSince: LISA_BRIEF.daysSince,
                             ltv: LISA_BRIEF.ltv,
-                          }),
-                        });
+                          });
                         const data = await res.json();
-                        const msg = data.message_draft || "We'd love to see you back, Lisa!";
+                        const msg = data.messageDraft || data.message_draft || "We'd love to see you back, Lisa!";
                         console.log("✅ Daily Brief win-back generated:", msg);
                         await sendWinBackSMS(LISA_BRIEF.phone, msg);
                       } catch (err) {
@@ -4047,11 +4033,7 @@ function IntegrationsScreen({ t, onClose }) {
   const handleRegSubmit = async () => {
     setRegSubmitting(true);
     try {
-      await fetch("/api/messaging/sms/register-10dlc", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ legalName: regForm.legalName, ein: regForm.ein }),
-      });
+      await api.post('/messaging/sms/register-10dlc', { legalName: regForm.legalName, ein: regForm.ein });
       setA2pStatus("pending");
       setShowRegForm(false);
     } catch {}
@@ -4628,19 +4610,15 @@ function EmailBriefScreen({ t, onClose }) {
                               if (winBackSent) return;
                               setWinBackSent("sending");
                               try {
-                                const res = await fetch("/api/ai/winback/generate", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("access_token") || ""}` },
-                                  body: JSON.stringify({
-                                    client_id: "00000000-0000-0000-0000-000000000000",
-                                    client_name: LISA_BRIEF.name,
-                                    last_service: LISA_BRIEF.lastService,
-                                    days_since: LISA_BRIEF.daysSince,
+                                const res = await api.post('/ai/winback/generate', {
+                                    clientId: "00000000-0000-0000-0000-000000000000",
+                                    clientName: LISA_BRIEF.name,
+                                    lastService: LISA_BRIEF.lastService,
+                                    daysSince: LISA_BRIEF.daysSince,
                                     ltv: LISA_BRIEF.ltv,
-                                  }),
-                                });
+                                  });
                                 const data = await res.json();
-                                const msg = data.message_draft || "We'd love to see you back, Lisa!";
+                                const msg = data.messageDraft || data.message_draft || "We'd love to see you back, Lisa!";
                                 console.log("✅ Email Brief win-back generated:", msg);
                                 await sendWinBackSMS(LISA_BRIEF.phone, msg);
                               } catch (err) {
@@ -5760,7 +5738,35 @@ function StepDailyBrief({ onNext, data, setData }) {
 // 9 — All done / launch
 function StepComplete({ data, onLaunch }) {
   const [visible, setVisible] = useState(false);
+  const [registering, setRegistering] = useState(false);
+  const [regError, setRegError] = useState(null);
   useEffect(() => { const t = setTimeout(() => setVisible(true), 100); return () => clearTimeout(t); }, []);
+
+  const handleLaunch = async () => {
+    // Attempt to register via real backend; fall back gracefully if it fails
+    if (data.email && data.password && !getToken()) {
+      setRegistering(true);
+      setRegError(null);
+      try {
+        const { register } = await import('./lib/auth.js');
+        await register(
+          data.bizName || "",
+          data.city || "",
+          data.bizType || "barbershop",
+          data.firstName || "",
+          data.lastName || "",
+          data.email,
+          data.password,
+        );
+      } catch (err) {
+        console.warn("Registration API error (continuing anyway):", err.message);
+        setRegError(err.message);
+      } finally {
+        setRegistering(false);
+      }
+    }
+    onLaunch();
+  };
 
   const recap = [
     { icon: "🏠", label: "Business", value: data.bizName || "Your shop" },
@@ -5809,7 +5815,10 @@ function StepComplete({ data, onLaunch }) {
       </div>
 
       <div style={{ opacity: visible?1:0, transition: "opacity 0.5s ease 0.5s" }}>
-        <Btn onClick={onLaunch}>Open FlatPurse Flow →</Btn>
+        <Btn onClick={handleLaunch} disabled={registering}>
+          {registering ? "Setting up…" : "Open FlatPurse Flow →"}
+        </Btn>
+        {regError && <div style={{ textAlign: "center", fontSize: 12, color: "#EF4444", marginTop: 6 }}>⚠ {regError} — continuing in demo mode</div>}
         <div style={{ textAlign: "center", fontSize: 12, color: "#94A3B8", marginTop: 10 }}>
           Questions? We're at hello@flatpurse.com
         </div>
@@ -6494,6 +6503,19 @@ function FlatpurseOnboarding({ onLaunchApp } = {}) {
 export default function FlatpurseRoot() {
   const [showApp, setShowApp] = useState(false);
   const [launching, setLaunching] = useState(false);
+
+  // On mount: check if a valid session already exists and skip onboarding
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    getMe().then(user => {
+      if (user) {
+        setShowApp(true);
+      } else {
+        clearToken();
+      }
+    });
+  }, []);
 
   const handleLaunch = () => {
     setLaunching(true);
