@@ -137,6 +137,8 @@ public record NotificationDto(Guid Id, NotificationType Type, string Title, stri
 // ── Messaging ─────────────────────────────────────────────────────────────────
 
 public record SendSmsRequest(Guid ClientId, string Message);
+public record SendSmsDirectRequest(string To, string Body);
+public record Register10DlcRequest(string LegalName, string Ein, string? Phone, string? Street, string? City, string? State, string? PostalCode);
 public record SendEmailRequest(Guid ClientId, string Subject, string Body);
 public record BlastRequest(string Message, List<ClientTag>? Tags, ChurnRisk? ChurnRisk);
 public record CreateTemplateRequest(string Name, string Subject, string Body, MessageChannel Channel);

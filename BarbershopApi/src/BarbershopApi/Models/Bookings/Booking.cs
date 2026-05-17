@@ -17,6 +17,8 @@ public class Booking
     public decimal DepositAmount { get; set; } = 0;
     public bool DepositPaid { get; set; } = false;
     public string? DepositPaymentIntentId { get; set; }
+    public string? InteracRefCode { get; set; }
+    public DepositStatus DepositStatus { get; set; } = DepositStatus.None;
     public string? SlotLockToken { get; set; }
     public DateTime? SlotLockedUntil { get; set; }
     public bool IsPublicBooking { get; set; } = false;

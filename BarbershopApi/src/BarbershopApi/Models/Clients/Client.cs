@@ -16,6 +16,7 @@ public class Client
     public ChurnRisk ChurnRisk { get; set; } = ChurnRisk.Low;
     public decimal LifetimeValue { get; set; } = 0;
     public int VisitCount { get; set; } = 0;
+    public int NoShowCount { get; set; } = 0;
     public DateTime? LastVisitAt { get; set; }
     public DateTime? NextVisitDueAt { get; set; }
     public int RebookIntervalDays { get; set; } = 28;
