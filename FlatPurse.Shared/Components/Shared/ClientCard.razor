@@ -1,0 +1,39 @@
+@using FlatPurse.Models
+@namespace FlatPurse.Components.Shared
+
+<div class="client-card" @onclick="OnClick">
+    <div class="client-avatar">
+        @if (!string.IsNullOrEmpty(Client.AvatarUrl))
+        {
+            <img src="@Client.AvatarUrl" alt="@Client.FirstName" />
+        }
+        else
+        {
+            <span class="avatar-initials">@Client.FirstName[0]@Client.LastName[0]</span>
+        }
+    </div>
+    <div class="client-info">
+        <div class="client-name">@Client.FirstName @Client.LastName</div>
+        <div class="client-meta">
+            @if (!string.IsNullOrEmpty(Client.Phone)) { <span>@Client.Phone</span> }
+            <span>@Client.VisitCount visits</span>
+            <span>$@Client.LifetimeValue.ToString("F0") LTV</span>
+        </div>
+        <div class="client-tags">
+            @foreach (var tag in Client.Tags)
+            {
+                <span class="tag tag-sm">@tag</span>
+            }
+            <span class="tag tag-risk-@Client.ChurnRisk.ToString().ToLower()">@Client.ChurnRisk</span>
+        </div>
+    </div>
+    <div class="client-last-visit">
+        <span class="last-visit-label">Last Visit</span>
+        <span class="last-visit-date">@(Client.LastVisitAt?.ToString("MMM d") ?? "Never")</span>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ClientDto Client { get; set; } = null!;
+    [Parameter] public EventCallback OnClick { get; set; }
+}

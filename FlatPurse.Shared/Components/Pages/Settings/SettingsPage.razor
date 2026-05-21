@@ -1,0 +1,200 @@
+@page "/settings"
+@using System.Text.Json
+@using FlatPurse.Models
+@using FlatPurse.Components.Shared
+@inject FlatPurse.Services.ApiService ApiService
+@inject FlatPurse.Services.AppStateService AppState
+@inject NavigationManager Nav
+
+<div class="page-header">
+    <h1 class="page-title">Settings</h1>
+</div>
+
+<div class="tab-bar">
+    <button class="tab-btn @(_activeTab == "Business" ? "active" : "")" @onclick='() => _activeTab = "Business"'>Business</button>
+    <button class="tab-btn @(_activeTab == "Plan" ? "active" : "")" @onclick='() => _activeTab = "Plan"'>Plan</button>
+    <button class="tab-btn @(_activeTab == "Notifications" ? "active" : "")" @onclick='() => _activeTab = "Notifications"'>Notifications</button>
+    <button class="tab-btn @(_activeTab == "Channels" ? "active" : "")" @onclick='() => _activeTab = "Channels"'>Channels</button>
+</div>
+
+@if (_loading)
+{
+    <LoadingSpinner />
+}
+else
+{
+    <div class="tab-content">
+        @if (_activeTab == "Business")
+        {
+            <div class="settings-section">
+                <h3>Business Information</h3>
+                @if (AppState.CurrentUser?.Business != null)
+                {
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <span class="detail-label">Business Name</span>
+                            <span>@AppState.CurrentUser.Business.Name</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">City</span>
+                            <span>@(AppState.CurrentUser.Business.City ?? "Not set")</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Type</span>
+                            <span>@(AppState.CurrentUser.Business.Type ?? "Not set")</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Booking Handle</span>
+                            <span>@(AppState.CurrentUser.Business.BookingHandle ?? "Not set")</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Plan</span>
+                            <span>@AppState.CurrentUser.Business.Plan</span>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="settings-section">
+                <h3>Your Profile</h3>
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <span class="detail-label">Name</span>
+                        <span>@AppState.CurrentUser?.FirstName @AppState.CurrentUser?.LastName</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Email</span>
+                        <span>@AppState.CurrentUser?.Email</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Role</span>
+                        <span>@AppState.CurrentUser?.Role</span>
+                    </div>
+                </div>
+            </div>
+        }
+        else if (_activeTab == "Plan")
+        {
+            <div class="settings-section">
+                <h3>Subscription</h3>
+                @if (_subscription != null)
+                {
+                    <div class="plan-card">
+                        <div class="plan-name">@_subscription.Plan</div>
+                        @if (_subscription.IsTrialing && _subscription.TrialEndsAt.HasValue)
+                        {
+                            <div class="trial-badge">Trial ends @_subscription.TrialEndsAt.Value.ToString("MMM d, yyyy")</div>
+                        }
+                        <div class="plan-status @(_subscription.IsActive ? "active" : "inactive")">
+                            @(_subscription.IsActive ? "Active" : "Inactive")
+                        </div>
+                        @if (_subscription.CurrentPeriodEnd.HasValue)
+                        {
+                            <p>Renews @_subscription.CurrentPeriodEnd.Value.ToString("MMM d, yyyy")</p>
+                        }
+                    </div>
+                    <div class="plan-options">
+                        @foreach (var plan in Enum.GetValues<SubscriptionPlan>())
+                        {
+                            <div class="plan-option @(_subscription.Plan == plan ? "current" : "")">
+                                <h4>@plan</h4>
+                                @if (_subscription.Plan == plan)
+                                {
+                                    <span class="badge">Current</span>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-outline">Upgrade</button>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+        else if (_activeTab == "Notifications")
+        {
+            <div class="settings-section">
+                <h3>Notification Preferences</h3>
+                <p class="settings-desc">Configure which notifications you receive.</p>
+                @if (_notifications != null)
+                {
+                    <div class="toggle-list">
+                        <div class="toggle-item">
+                            <span>Booking Confirmations</span>
+                            <input type="checkbox" checked="@_notifications.BookingConfirmations" />
+                        </div>
+                        <div class="toggle-item">
+                            <span>Booking Reminders</span>
+                            <input type="checkbox" checked="@_notifications.BookingReminders" />
+                        </div>
+                        <div class="toggle-item">
+                            <span>Payment Receipts</span>
+                            <input type="checkbox" checked="@_notifications.PaymentReceipts" />
+                        </div>
+                        <div class="toggle-item">
+                            <span>AutoPilot Alerts</span>
+                            <input type="checkbox" checked="@_notifications.AutoPilotAlerts" />
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else if (_activeTab == "Channels")
+        {
+            <div class="settings-section">
+                <h3>Connected Channels</h3>
+                <p class="settings-desc">Connect communication channels for messaging and autopilot.</p>
+                @if (_channels != null && _channels.Any())
+                {
+                    <div class="channels-list">
+                        @foreach (var ch in _channels)
+                        {
+                            <div class="channel-card">
+                                <span class="channel-type">@ch.Type</span>
+                                <span class="channel-status status-@ch.Status.ToString().ToLower()">@ch.Status</span>
+                                @if (ch.ExternalAccountName != null)
+                                {
+                                    <span class="channel-account">@ch.ExternalAccountName</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <EmptyState Message="No channels connected yet." />
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string _activeTab = "Business";
+    private SubscriptionDto? _subscription;
+    private NotificationSettingsDto? _notifications;
+    private IEnumerable<ChannelDto>? _channels;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AppState.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        var settings = await ApiService.GetAsync<BusinessSettingsDto>("settings");
+        if (settings != null)
+        {
+            _notifications = settings.Notifications;
+        }
+
+        _subscription = await ApiService.GetAsync<SubscriptionDto>("settings/subscription");
+        _channels = await ApiService.GetAsync<IEnumerable<ChannelDto>>("channels");
+
+        _loading = false;
+        StateHasChanged();
+    }
+}

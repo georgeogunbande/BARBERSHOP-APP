@@ -1,0 +1,77 @@
+@inject FlatPurse.Services.AppStateService AppState
+@inject FlatPurse.Services.AuthService AuthService
+@inject NavigationManager Nav
+
+<nav class="sidebar">
+    <div class="sidebar-logo">
+        <span class="logo-mark">FP</span>
+        <span class="logo-text">FlatPurse</span>
+    </div>
+
+    <ul class="nav-list">
+        <li>
+            <NavLink href="/" Match="NavLinkMatch.All" class="nav-link">
+                <span class="nav-icon">&#x1F4CA;</span>
+                <span>Dashboard</span>
+            </NavLink>
+        </li>
+        <li>
+            <NavLink href="/bookings" class="nav-link">
+                <span class="nav-icon">&#x1F4C5;</span>
+                <span>Bookings</span>
+            </NavLink>
+        </li>
+        <li>
+            <NavLink href="/clients" class="nav-link">
+                <span class="nav-icon">&#x1F465;</span>
+                <span>Clients</span>
+            </NavLink>
+        </li>
+        <li>
+            <NavLink href="/payments" class="nav-link">
+                <span class="nav-icon">&#x1F4B3;</span>
+                <span>Payments</span>
+            </NavLink>
+        </li>
+        <li>
+            <NavLink href="/messaging" class="nav-link">
+                <span class="nav-icon">&#x1F4AC;</span>
+                <span>Messaging</span>
+            </NavLink>
+        </li>
+        <li>
+            <NavLink href="/autopilot" class="nav-link">
+                <span class="nav-icon">&#x1F916;</span>
+                <span>AutoPilot</span>
+            </NavLink>
+        </li>
+        <li>
+            <NavLink href="/settings" class="nav-link">
+                <span class="nav-icon">&#x2699;&#xFE0F;</span>
+                <span>Settings</span>
+            </NavLink>
+        </li>
+    </ul>
+
+    <div class="sidebar-footer">
+        @if (AppState.CurrentUser != null)
+        {
+            <div class="user-info">
+                <div class="user-avatar">@AppState.CurrentUser.FirstName[0]</div>
+                <div class="user-details">
+                    <div class="user-name">@AppState.CurrentUser.FirstName @AppState.CurrentUser.LastName</div>
+                    <div class="user-role">@AppState.CurrentUser.Role</div>
+                </div>
+            </div>
+        }
+        <button class="btn-logout" @onclick="LogoutAsync">Sign out</button>
+    </div>
+</nav>
+
+@code {
+    private async Task LogoutAsync()
+    {
+        await AuthService.LogoutAsync();
+        Nav.NavigateTo("/login");
+    }
+}

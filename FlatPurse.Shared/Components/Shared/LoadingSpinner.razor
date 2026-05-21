@@ -1,0 +1,15 @@
+@namespace FlatPurse.Components.Shared
+
+<div class="loading-spinner-wrapper">
+    <div class="spinner" role="status" aria-label="Loading">
+        <div class="spinner-ring"></div>
+    </div>
+    @if (!string.IsNullOrEmpty(Message))
+    {
+        <p class="spinner-message">@Message</p>
+    }
+</div>
+
+@code {
+    [Parameter] public string Message { get; set; } = string.Empty;
+}

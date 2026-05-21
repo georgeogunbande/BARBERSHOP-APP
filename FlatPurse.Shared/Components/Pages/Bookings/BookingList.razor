@@ -1,0 +1,118 @@
+@page "/bookings"
+@using System.Text.Json
+@using FlatPurse.Models
+@using FlatPurse.Components.Shared
+@inject FlatPurse.Services.BookingService BookingService
+@inject FlatPurse.Services.AppStateService AppState
+@inject NavigationManager Nav
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Bookings</h1>
+    </div>
+    <a href="/bookings/new" class="btn btn-primary">+ New Booking</a>
+</div>
+
+<div class="filters-bar">
+    <input type="date" class="filter-input" @bind="_fromDate" @bind:after="LoadBookingsAsync" />
+    <input type="date" class="filter-input" @bind="_toDate" @bind:after="LoadBookingsAsync" />
+</div>
+
+@if (_loading)
+{
+    <LoadingSpinner />
+}
+else if (_bookings.Count == 0)
+{
+    <EmptyState Message="No bookings found for the selected period." />
+}
+else
+{
+    <div class="booking-list">
+        @foreach (var b in _bookings)
+        {
+            <BookingRow Booking="@b"
+                        OnComplete="() => CompleteAsync(b.Id)"
+                        OnCancel="() => CancelAsync(b.Id)"
+                        OnNoShow="() => NoShowAsync(b.Id)" />
+        }
+    </div>
+
+    <div class="pagination">
+        <button class="btn btn-ghost" disabled="@(_page <= 1)" @onclick="PrevPage">Previous</button>
+        <span>Page @_page of @_totalPages</span>
+        <button class="btn btn-ghost" disabled="@(_page >= _totalPages)" @onclick="NextPage">Next</button>
+    </div>
+}
+
+@code {
+    private List<BookingDto> _bookings = new();
+    private int _total;
+    private int _page = 1;
+    private const int _limit = 50;
+    private bool _loading = true;
+    private DateTime _fromDate = DateTime.Today;
+    private DateTime _toDate = DateTime.Today.AddDays(7);
+
+    private int _totalPages => (int)Math.Ceiling((double)_total / _limit);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AppState.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+        await LoadBookingsAsync();
+    }
+
+    private async Task LoadBookingsAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var result = await BookingService.GetBookingsAsync(from: _fromDate, to: _toDate.AddDays(1), page: _page, limit: _limit);
+        if (result != null)
+        {
+            var json = JsonSerializer.Serialize(result);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("items", out var items))
+                _bookings = JsonSerializer.Deserialize<List<BookingDto>>(items.GetRawText(),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+            if (root.TryGetProperty("total", out var total))
+                _total = total.GetInt32();
+        }
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task CompleteAsync(Guid id)
+    {
+        await BookingService.CompleteBookingAsync(id);
+        await LoadBookingsAsync();
+    }
+
+    private async Task CancelAsync(Guid id)
+    {
+        await BookingService.CancelBookingAsync(id);
+        await LoadBookingsAsync();
+    }
+
+    private async Task NoShowAsync(Guid id)
+    {
+        await BookingService.NoShowBookingAsync(id);
+        await LoadBookingsAsync();
+    }
+
+    private async Task PrevPage()
+    {
+        if (_page > 1) { _page--; await LoadBookingsAsync(); }
+    }
+
+    private async Task NextPage()
+    {
+        if (_page < _totalPages) { _page++; await LoadBookingsAsync(); }
+    }
+}

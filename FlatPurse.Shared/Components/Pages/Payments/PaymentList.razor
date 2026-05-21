@@ -1,0 +1,129 @@
+@page "/payments"
+@using System.Text.Json
+@using FlatPurse.Models
+@using FlatPurse.Components.Shared
+@inject FlatPurse.Services.PaymentService PaymentService
+@inject FlatPurse.Services.AppStateService AppState
+@inject NavigationManager Nav
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Payments</h1>
+    </div>
+    <a href="/payments/checkout" class="btn btn-primary">+ Checkout</a>
+</div>
+
+@if (_loading)
+{
+    <LoadingSpinner />
+}
+else
+{
+    <div class="summary-bar">
+        <div class="summary-item">
+            <span class="summary-label">Pending Balance</span>
+            <span class="summary-value">$@_pendingAmount.ToString("F2")</span>
+        </div>
+    </div>
+
+    @if (_payments.Count == 0)
+    {
+        <EmptyState Message="No payment transactions yet." />
+    }
+    else
+    {
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Amount</th>
+                        <th>Tip</th>
+                        <th>Net</th>
+                        <th>Method</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in _payments)
+                    {
+                        <tr>
+                            <td>@p.CreatedAt.ToString("MMM d, yyyy")</td>
+                            <td>$@p.Amount.ToString("F2")</td>
+                            <td>$@p.TipAmount.ToString("F2")</td>
+                            <td>$@p.NetAmount.ToString("F2")</td>
+                            <td><span class="badge badge-method">@p.Method</span></td>
+                            <td><span class="badge badge-@p.Status.ToString().ToLower()">@p.Status</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pagination">
+            <button class="btn btn-ghost" disabled="@(_page <= 1)" @onclick="PrevPage">Previous</button>
+            <span>Page @_page</span>
+            <button class="btn btn-ghost" disabled="@(_payments.Count < _limit)" @onclick="NextPage">Next</button>
+        </div>
+    }
+}
+
+@code {
+    private List<PaymentDto> _payments = new();
+    private decimal _pendingAmount;
+    private int _page = 1;
+    private const int _limit = 20;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AppState.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var payouts = await PaymentService.GetPayoutsAsync(_page, _limit);
+        if (payouts != null)
+        {
+            // payments come from payouts endpoint
+            var json = JsonSerializer.Serialize(payouts);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("items", out var items))
+                _payments = JsonSerializer.Deserialize<List<PaymentDto>>(items.GetRawText(),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+        }
+
+        var pending = await PaymentService.GetPendingBalanceAsync();
+        if (pending != null)
+        {
+            var json = JsonSerializer.Serialize(pending);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("amount", out var amount))
+                _pendingAmount = amount.GetDecimal();
+        }
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task PrevPage()
+    {
+        if (_page > 1) { _page--; await LoadDataAsync(); }
+    }
+
+    private async Task NextPage()
+    {
+        _page++;
+        await LoadDataAsync();
+    }
+}

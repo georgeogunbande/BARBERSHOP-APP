@@ -1,0 +1,177 @@
+@page "/clients/{Id:guid}"
+@using FlatPurse.Models
+@using FlatPurse.Components.Shared
+@inject FlatPurse.Services.ClientService ClientService
+@inject FlatPurse.Services.AppStateService AppState
+@inject NavigationManager Nav
+
+@if (_loading)
+{
+    <LoadingSpinner />
+}
+else if (_client == null)
+{
+    <EmptyState Message="Client not found." />
+}
+else
+{
+    <div class="page-header">
+        <div>
+            <button class="btn-back" @onclick="() => Nav.NavigateTo("/clients")">&#8592; Clients</button>
+            <h1 class="page-title">@_client.FirstName @_client.LastName</h1>
+            <div class="client-tags">
+                @foreach (var tag in _client.Tags)
+                {
+                    <span class="tag tag-@tag.ToString().ToLower()">@tag</span>
+                }
+                <span class="tag tag-risk-@_client.ChurnRisk.ToString().ToLower()">@_client.ChurnRisk Risk</span>
+            </div>
+        </div>
+        <div class="client-actions">
+            @if (_client.ChurnRisk == ChurnRisk.High)
+            {
+                <button class="btn btn-warning" @onclick="TriggerWinbackAsync">Send Win-Back</button>
+            }
+        </div>
+    </div>
+
+    <div class="client-stats">
+        <div class="stat-item">
+            <span class="stat-label">Lifetime Value</span>
+            <span class="stat-value">$@_client.LifetimeValue.ToString("F2")</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Total Visits</span>
+            <span class="stat-value">@_client.VisitCount</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Last Visit</span>
+            <span class="stat-value">@(_client.LastVisitAt?.ToString("MMM d, yyyy") ?? "Never")</span>
+        </div>
+    </div>
+
+    <div class="tab-bar">
+        @foreach (var tab in _tabs)
+        {
+            <button class="tab-btn @(_activeTab == tab ? "active" : "")" @onclick="() => _activeTab = tab">@tab</button>
+        }
+    </div>
+
+    <div class="tab-content">
+        @if (_activeTab == "Overview")
+        {
+            <div class="detail-grid">
+                <div class="detail-item"><span class="detail-label">Email</span><span>@(_client.Email ?? "—")</span></div>
+                <div class="detail-item"><span class="detail-label">Phone</span><span>@(_client.Phone ?? "—")</span></div>
+            </div>
+        }
+        else if (_activeTab == "Notes")
+        {
+            <div class="notes-section">
+                <div class="add-note-form">
+                    <textarea class="form-control" rows="3" placeholder="Add a note..." @bind="_newNote"></textarea>
+                    <button class="btn btn-primary" @onclick="AddNoteAsync">Add Note</button>
+                </div>
+                @if (_notes != null)
+                {
+                    @foreach (var note in _notes)
+                    {
+                        <div class="note-card @(note.IsPinned ? "note-pinned" : "")">
+                            @if (note.IsPinned) { <span class="pin-badge">Pinned</span> }
+                            <p>@note.Content</p>
+                            <span class="note-meta">@note.CreatedAt.ToString("MMM d, yyyy")</span>
+                        </div>
+                    }
+                }
+            </div>
+        }
+        else if (_activeTab == "AI Insights")
+        {
+            @if (_aiInsights == null)
+            {
+                <LoadingSpinner />
+            }
+            else
+            {
+                <div class="insights-section">
+                    <div class="insight-card">
+                        <h3>Churn Risk: @_aiInsights.ChurnRisk</h3>
+                        <p>Predicted LTV: $@_aiInsights.PredictedLtv.ToString("F2")</p>
+                    </div>
+                    @if (_aiInsights.UpsellOpportunities.Any())
+                    {
+                        <div class="insight-card">
+                            <h3>Upsell Opportunities</h3>
+                            <ul>
+                                @foreach (var opp in _aiInsights.UpsellOpportunities)
+                                {
+                                    <li>@opp</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                    @if (_aiInsights.WinbackMessage != null)
+                    {
+                        <div class="insight-card insight-winback">
+                            <h3>Suggested Win-Back Message</h3>
+                            <p>@_aiInsights.WinbackMessage</p>
+                            <button class="btn btn-primary" @onclick="TriggerWinbackAsync">Send Now</button>
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </div>
+
+    @if (_winbackSuccess)
+    {
+        <div class="alert alert-success">Win-back message sent successfully!</div>
+    }
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private ClientDto? _client;
+    private IEnumerable<ClientNoteDto>? _notes;
+    private ClientAiInsightDto? _aiInsights;
+    private bool _loading = true;
+    private bool _winbackSuccess;
+    private string _newNote = string.Empty;
+    private string _activeTab = "Overview";
+    private readonly string[] _tabs = { "Overview", "Notes", "AI Insights" };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AppState.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        _client = await ClientService.GetClientAsync(Id);
+        _notes = await ClientService.GetNotesAsync(Id);
+        _aiInsights = await ClientService.GetAiInsightsAsync(Id);
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task TriggerWinbackAsync()
+    {
+        await ClientService.TriggerWinbackAsync(Id);
+        _winbackSuccess = true;
+        StateHasChanged();
+        await Task.Delay(3000);
+        _winbackSuccess = false;
+        StateHasChanged();
+    }
+
+    private async Task AddNoteAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newNote)) return;
+        await ClientService.AddNoteAsync(Id, new AddNoteRequest(_newNote));
+        _newNote = string.Empty;
+        _notes = await ClientService.GetNotesAsync(Id);
+        StateHasChanged();
+    }
+}

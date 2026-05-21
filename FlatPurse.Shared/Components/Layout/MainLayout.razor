@@ -1,0 +1,30 @@
+@inherits LayoutComponentBase
+@inject FlatPurse.Services.AppStateService AppState
+@inject NavigationManager Nav
+@implements IDisposable
+
+@if (!AppState.IsAuthenticated)
+{
+    @Body
+}
+else
+{
+    <div class="app-shell">
+        <NavSidebar />
+        <main class="main-content">
+            @Body
+        </main>
+    </div>
+}
+
+@code {
+    protected override void OnInitialized()
+    {
+        AppState.OnChange += StateHasChanged;
+    }
+
+    public void Dispose()
+    {
+        AppState.OnChange -= StateHasChanged;
+    }
+}

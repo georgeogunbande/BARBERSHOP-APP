@@ -1,0 +1,45 @@
+@using FlatPurse.Models
+@namespace FlatPurse.Components.Shared
+
+<div class="booking-row status-@Booking.Status.ToString().ToLower()">
+    <div class="booking-time">
+        <span class="booking-date">@Booking.StartsAt.ToString("MMM d")</span>
+        <span class="booking-hour">@Booking.StartsAt.ToString("h:mm tt")</span>
+    </div>
+    <div class="booking-details">
+        <div class="booking-client">@Booking.ClientName</div>
+        <div class="booking-service">@Booking.ServiceName with @Booking.StaffName</div>
+        @if (!string.IsNullOrEmpty(Booking.Notes))
+        {
+            <div class="booking-notes">@Booking.Notes</div>
+        }
+    </div>
+    <div class="booking-price">$@Booking.Price.ToString("F2")</div>
+    <div class="booking-status">
+        <span class="badge badge-@Booking.Status.ToString().ToLower()">@Booking.Status</span>
+    </div>
+    @if (Booking.Status == BookingStatus.Confirmed || Booking.Status == BookingStatus.InProgress)
+    {
+        <div class="booking-actions">
+            @if (OnComplete.HasDelegate)
+            {
+                <button class="btn btn-sm btn-success" @onclick="OnComplete">Complete</button>
+            }
+            @if (OnNoShow.HasDelegate)
+            {
+                <button class="btn btn-sm btn-warning" @onclick="OnNoShow">No-Show</button>
+            }
+            @if (OnCancel.HasDelegate)
+            {
+                <button class="btn btn-sm btn-danger" @onclick="OnCancel">Cancel</button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public BookingDto Booking { get; set; } = null!;
+    [Parameter] public EventCallback OnComplete { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public EventCallback OnNoShow { get; set; }
+}

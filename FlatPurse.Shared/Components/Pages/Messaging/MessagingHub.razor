@@ -1,0 +1,241 @@
+@page "/messaging"
+@using FlatPurse.Models
+@using FlatPurse.Components.Shared
+@inject FlatPurse.Services.MessagingService MessagingService
+@inject FlatPurse.Services.ClientService ClientService
+@inject FlatPurse.Services.AppStateService AppState
+@inject NavigationManager Nav
+
+<div class="page-header">
+    <h1 class="page-title">Messaging</h1>
+</div>
+
+@if (!string.IsNullOrEmpty(_successMessage))
+{
+    <div class="alert alert-success">@_successMessage</div>
+}
+@if (!string.IsNullOrEmpty(_errorMessage))
+{
+    <div class="alert alert-error">@_errorMessage</div>
+}
+
+<div class="tab-bar">
+    <button class="tab-btn @(_activeTab == "direct" ? "active" : "")" @onclick='() => _activeTab = "direct"'>Direct Message</button>
+    <button class="tab-btn @(_activeTab == "blast" ? "active" : "")" @onclick='() => _activeTab = "blast"'>Blast</button>
+    <button class="tab-btn @(_activeTab == "templates" ? "active" : "")" @onclick='() => _activeTab = "templates"'>Templates</button>
+</div>
+
+<div class="tab-content">
+    @if (_activeTab == "direct")
+    {
+        <div class="message-form">
+            <div class="form-group">
+                <label>Client</label>
+                <input class="form-control" type="search" placeholder="Search client..."
+                       @bind="_clientSearch" @bind:event="oninput" @onkeyup="OnClientSearch" />
+                @if (_clientResults.Any())
+                {
+                    <ul class="search-dropdown">
+                        @foreach (var c in _clientResults)
+                        {
+                            <li @onclick="() => SelectClient(c)">@c.FirstName @c.LastName — @c.Phone</li>
+                        }
+                    </ul>
+                }
+                @if (_selectedClient != null)
+                {
+                    <div class="selected-badge">
+                        <strong>@_selectedClient.FirstName @_selectedClient.LastName</strong>
+                        <button @onclick="() => _selectedClient = null">&#x2715;</button>
+                    </div>
+                }
+            </div>
+
+            <div class="form-group">
+                <label>Channel</label>
+                <InputSelect class="form-control" @bind-Value="_channel">
+                    <option value="SMS">SMS</option>
+                    <option value="Email">Email</option>
+                </InputSelect>
+            </div>
+
+            @if (_channel == "Email")
+            {
+                <div class="form-group">
+                    <label>Subject</label>
+                    <input class="form-control" type="text" @bind="_subject" placeholder="Email subject..." />
+                </div>
+            }
+
+            <div class="form-group">
+                <label>Message</label>
+                <textarea class="form-control" rows="5" @bind="_message"
+                          placeholder="Type your message here..."></textarea>
+                @if (_channel == "SMS")
+                {
+                    <span class="char-count">@_message.Length / 160</span>
+                }
+            </div>
+
+            <button class="btn btn-primary" @onclick="SendDirectAsync" disabled="@(_submitting || _selectedClient == null)">
+                @(_submitting ? "Sending..." : "Send Message")
+            </button>
+        </div>
+    }
+    else if (_activeTab == "blast")
+    {
+        <div class="blast-form">
+            <div class="form-group">
+                <label>Message</label>
+                <textarea class="form-control" rows="5" @bind="_blastMessage"
+                          placeholder="Your blast message..."></textarea>
+                <span class="char-count">@_blastMessage.Length / 160</span>
+            </div>
+
+            <div class="form-group">
+                <label>Filter by Tag (optional)</label>
+                <InputSelect class="form-control" @bind-Value="_blastTag">
+                    <option value="">All clients</option>
+                    @foreach (var tag in Enum.GetValues<ClientTag>())
+                    {
+                        <option value="@tag">@tag</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="form-group">
+                <label>Filter by Churn Risk (optional)</label>
+                <InputSelect class="form-control" @bind-Value="_blastRisk">
+                    <option value="">All risk levels</option>
+                    @foreach (var risk in Enum.GetValues<ChurnRisk>())
+                    {
+                        <option value="@risk">@risk</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <button class="btn btn-warning" @onclick="SendBlastAsync" disabled="@_submitting">
+                @(_submitting ? "Sending..." : "Send Blast")
+            </button>
+        </div>
+    }
+    else if (_activeTab == "templates")
+    {
+        @if (_templates == null)
+        {
+            <LoadingSpinner />
+        }
+        else if (!_templates.Any())
+        {
+            <EmptyState Message="No message templates yet." />
+        }
+        else
+        {
+            <div class="templates-list">
+                @foreach (var t in _templates)
+                {
+                    <div class="template-card">
+                        <div class="template-header">
+                            <h3>@t.Name</h3>
+                            <span class="badge">@t.Channel</span>
+                        </div>
+                        @if (t.Channel == MessageChannel.Email)
+                        {
+                            <p class="template-subject">Subject: @t.Subject</p>
+                        }
+                        <p class="template-body">@t.Body</p>
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private bool _submitting;
+    private string? _successMessage;
+    private string? _errorMessage;
+    private string _activeTab = "direct";
+
+    private string _clientSearch = string.Empty;
+    private List<ClientDto> _clientResults = new();
+    private ClientDto? _selectedClient;
+    private string _channel = "SMS";
+    private string _subject = string.Empty;
+    private string _message = string.Empty;
+
+    private string _blastMessage = string.Empty;
+    private string _blastTag = string.Empty;
+    private string _blastRisk = string.Empty;
+
+    private IEnumerable<MessageTemplateDto>? _templates;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AppState.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+        _templates = await MessagingService.GetTemplatesAsync();
+        StateHasChanged();
+    }
+
+    private async Task OnClientSearch(KeyboardEventArgs e)
+    {
+        if (_clientSearch.Length < 2) { _clientResults.Clear(); return; }
+        var results = await ClientService.SearchClientsAsync(_clientSearch);
+        _clientResults = results?.Take(5).ToList() ?? new();
+        StateHasChanged();
+    }
+
+    private void SelectClient(ClientDto client)
+    {
+        _selectedClient = client;
+        _clientSearch = string.Empty;
+        _clientResults.Clear();
+        StateHasChanged();
+    }
+
+    private async Task SendDirectAsync()
+    {
+        if (_selectedClient == null) return;
+        _submitting = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        if (_channel == "SMS")
+        {
+            var result = await MessagingService.SendSmsAsync(new SendSmsRequest(_selectedClient.Id, _message));
+            _successMessage = result != null ? "SMS sent!" : null;
+            _errorMessage = result == null ? "Failed to send SMS." : null;
+        }
+        else
+        {
+            var result = await MessagingService.SendEmailAsync(new SendEmailRequest(_selectedClient.Id, _subject, _message));
+            _successMessage = result != null ? "Email sent!" : null;
+            _errorMessage = result == null ? "Failed to send email." : null;
+        }
+
+        _submitting = false;
+        StateHasChanged();
+    }
+
+    private async Task SendBlastAsync()
+    {
+        _submitting = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        ClientTag? tag = Enum.TryParse<ClientTag>(_blastTag, out var t) ? t : null;
+        ChurnRisk? risk = Enum.TryParse<ChurnRisk>(_blastRisk, out var r) ? r : null;
+        var tags = tag.HasValue ? new List<ClientTag> { tag.Value } : null;
+
+        var result = await MessagingService.SendBlastAsync(new BlastRequest(_blastMessage, tags, risk));
+        _successMessage = result != null ? "Blast sent!" : null;
+        _errorMessage = result == null ? "Failed to send blast." : null;
+
+        _submitting = false;
+        StateHasChanged();
+    }
+}
