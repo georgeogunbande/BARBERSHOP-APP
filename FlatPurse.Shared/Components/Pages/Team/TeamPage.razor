@@ -1,0 +1,79 @@
+@page "/team"
+@inject FlatPurse.Services.AppStateService AppState
+@inject NavigationManager Nav
+
+<div class="stat-row">
+    <div class="stat-card">
+        <div class="stat-label">Team Members</div>
+        <div class="stat-value">4</div>
+        <div class="stat-delta neutral">3 stylists · 1 barber</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Team Revenue</div>
+        <div class="stat-value">$3,167</div>
+        <div class="stat-delta positive">↑ 14% this week</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Avg Utilization</div>
+        <div class="stat-value">68%</div>
+        <div class="stat-delta warning">⚠ Target 80%</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Avg Rebook Rate</div>
+        <div class="stat-value">81%</div>
+        <div class="stat-delta positive">↑ 3% this month</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Team Performance</span>
+        <a href="/staff/new" class="btn btn-primary" style="font-size:12px;padding:6px 14px">+ Add Staff</a>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Name</th><th>Role</th><th>Revenue</th><th>Appointments</th><th>Utilization</th><th>Rebook Rate</th><th>No-Show Rate</th></tr></thead>
+            <tbody>
+                @foreach (var m in _team)
+                {
+                    <tr>
+                        <td>
+                            <div style="display:flex;align-items:center;gap:10px">
+                                <div style="width:28px;height:28px;border-radius:14px;background:@m.Color;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff">@m.Initials</div>
+                                @m.Name
+                            </div>
+                        </td>
+                        <td style="color:var(--text-3)">@m.Role</td>
+                        <td style="font-family:var(--mono);font-weight:700">$@m.Rev</td>
+                        <td>@m.Apts</td>
+                        <td>
+                            <div style="display:flex;align-items:center;gap:8px">
+                                @m.Util%
+                                <div class="util-bar" style="width:60px"><div class="util-fill" style="width:@m.Util%"></div></div>
+                            </div>
+                        </td>
+                        <td style="color:var(--green);font-weight:700">@m.RebookRate</td>
+                        <td style="color:@(m.NoShowRate == "0%" ? "var(--green)" : "var(--amber)")">@m.NoShowRate</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    private record TeamMember(string Initials, string Color, string Name, string Role, int Rev, int Apts, int Util, string RebookRate, string NoShowRate);
+
+    private readonly List<TeamMember> _team = new()
+    {
+        new("EW", "#534AB7", "Emma Watson",  "Senior Stylist", 1420, 6, 88, "92%", "0%"),
+        new("JM", "#DB2777", "James Miller", "Barber",          890, 7, 76, "78%", "8%"),
+        new("ZA", "#16A34A", "Zara Ahmed",   "Colorist",        537, 4, 62, "85%", "3%"),
+        new("KL", "#9333EA", "Kevin Lee",    "Stylist",         320, 3, 45, "70%", "0%"),
+    };
+
+    protected override void OnInitialized()
+    {
+        if (!AppState.IsAuthenticated) Nav.NavigateTo("/login");
+    }
+}

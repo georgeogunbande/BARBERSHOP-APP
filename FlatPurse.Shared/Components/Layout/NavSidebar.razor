@@ -2,73 +2,101 @@
 @inject FlatPurse.Services.AuthService AuthService
 @inject NavigationManager Nav
 
-<nav class="sidebar">
+<nav class="sidebar @(_collapsed ? "collapsed" : "")">
+    <button class="collapse-btn" @onclick="ToggleCollapse" title="@(_collapsed ? "Expand" : "Collapse")">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+    </button>
+
     <div class="sidebar-logo">
-        <span class="logo-mark">FP</span>
-        <span class="logo-text">FlatPurse</span>
+        <div class="sidebar-logo-mark">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+            </svg>
+        </div>
+        <div class="sidebar-logo-text">
+            <div class="name">FlatPurse</div>
+            <div class="tag">FLOW</div>
+        </div>
     </div>
 
-    <ul class="nav-list">
-        <li>
-            <NavLink href="/" Match="NavLinkMatch.All" class="nav-link">
-                <span class="nav-icon">&#x1F4CA;</span>
-                <span>Dashboard</span>
-            </NavLink>
-        </li>
-        <li>
-            <NavLink href="/bookings" class="nav-link">
-                <span class="nav-icon">&#x1F4C5;</span>
-                <span>Bookings</span>
-            </NavLink>
-        </li>
-        <li>
-            <NavLink href="/clients" class="nav-link">
-                <span class="nav-icon">&#x1F465;</span>
-                <span>Clients</span>
-            </NavLink>
-        </li>
-        <li>
-            <NavLink href="/payments" class="nav-link">
-                <span class="nav-icon">&#x1F4B3;</span>
-                <span>Payments</span>
-            </NavLink>
-        </li>
-        <li>
-            <NavLink href="/messaging" class="nav-link">
-                <span class="nav-icon">&#x1F4AC;</span>
-                <span>Messaging</span>
-            </NavLink>
-        </li>
-        <li>
-            <NavLink href="/autopilot" class="nav-link">
-                <span class="nav-icon">&#x1F916;</span>
-                <span>AutoPilot</span>
-            </NavLink>
-        </li>
-        <li>
-            <NavLink href="/settings" class="nav-link">
-                <span class="nav-icon">&#x2699;&#xFE0F;</span>
-                <span>Settings</span>
-            </NavLink>
-        </li>
-    </ul>
+    <div class="nav-section">
+        <div class="nav-label">Main</div>
+        <NavLink href="/" Match="NavLinkMatch.All" class="nav-item" ActiveClass="active">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            <span class="nav-item-label">Dashboard</span>
+        </NavLink>
+        <NavLink href="/bookings" class="nav-item" ActiveClass="active">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <span class="nav-item-label">Bookings</span>
+        </NavLink>
+        <NavLink href="/clients" class="nav-item" ActiveClass="active">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span class="nav-item-label">Clients</span>
+        </NavLink>
+        <NavLink href="/payments" class="nav-item" ActiveClass="active">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+            <span class="nav-item-label">Payments</span>
+        </NavLink>
+    </div>
 
-    <div class="sidebar-footer">
+    <div class="nav-section">
+        <div class="nav-label">Intelligence</div>
+        <NavLink href="/autopilot" class="nav-item" ActiveClass="active">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+            <span class="nav-item-label">AutoPilot</span>
+            <span class="nav-badge">3</span>
+        </NavLink>
+        <NavLink href="/messaging" class="nav-item" ActiveClass="active">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span class="nav-item-label">Messaging</span>
+        </NavLink>
+    </div>
+
+    <div class="nav-section">
+        <div class="nav-label">Analytics</div>
+        <NavLink href="/operations" class="nav-item" ActiveClass="active">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            <span class="nav-item-label">Operations</span>
+        </NavLink>
+        <NavLink href="/reports" class="nav-item" ActiveClass="active">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            <span class="nav-item-label">Reports</span>
+        </NavLink>
+    </div>
+
+    <div class="nav-section">
+        <div class="nav-label">Team</div>
+        <NavLink href="/team" class="nav-item" ActiveClass="active">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span class="nav-item-label">Team</span>
+        </NavLink>
+        <NavLink href="/settings" class="nav-item" ActiveClass="active">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span class="nav-item-label">Settings</span>
+        </NavLink>
+    </div>
+
+    <div class="sidebar-bottom">
         @if (AppState.CurrentUser != null)
         {
-            <div class="user-info">
-                <div class="user-avatar">@AppState.CurrentUser.FirstName[0]</div>
-                <div class="user-details">
-                    <div class="user-name">@AppState.CurrentUser.FirstName @AppState.CurrentUser.LastName</div>
-                    <div class="user-role">@AppState.CurrentUser.Role</div>
+            <div class="owner-card" @onclick="LogoutAsync">
+                <div class="owner-avatar">@AppState.CurrentUser.FirstName[0]@AppState.CurrentUser.LastName[0]</div>
+                <div>
+                    <div class="owner-name">@AppState.CurrentUser.FirstName @AppState.CurrentUser.LastName</div>
+                    <div class="owner-plan">Growth Plan · Sign out</div>
                 </div>
             </div>
         }
-        <button class="btn-logout" @onclick="LogoutAsync">Sign out</button>
     </div>
 </nav>
 
 @code {
+    private bool _collapsed = false;
+
+    private void ToggleCollapse() => _collapsed = !_collapsed;
+
     private async Task LogoutAsync()
     {
         await AuthService.LogoutAsync();
