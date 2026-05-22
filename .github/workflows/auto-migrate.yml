@@ -3,7 +3,7 @@ name: Generate and Apply Migrations
 on:
   workflow_dispatch:
   push:
-    branches: [main, claude/create-barbershop-app-zt9Zn, claude/fix-bash-startup-error-KzP7u]
+    branches: [main, claude/create-barbershop-app-zt9Zn]
     paths:
       - 'BarbershopApi/src/BarbershopApi/Models/**'
       - 'BarbershopApi/src/BarbershopApi/Data/**'
