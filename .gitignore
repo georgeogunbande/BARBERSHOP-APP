@@ -11,6 +11,11 @@ BarbershopApi/**/bin/
 BarbershopApi/**/obj/
 BarbershopApi/**/.vs/
 
+# FlatPurse projects build output
+FlatPurse.*/**/bin/
+FlatPurse.*/**/obj/
+.vs/
+
 # User secrets
 BarbershopApi/**/secrets.json
 

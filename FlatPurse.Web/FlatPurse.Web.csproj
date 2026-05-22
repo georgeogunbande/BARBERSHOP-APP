@@ -5,9 +5,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Components.Server" Version="9.0.0" />
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\FlatPurse.Shared\FlatPurse.Shared.csproj" />
   </ItemGroup>
 </Project>

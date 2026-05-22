@@ -60,12 +60,23 @@ else
     protected override async Task OnInitializedAsync()
     {
         if (!AppState.IsAuthenticated)
+            return;
+
+        await LoadDataAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        if (!AppState.IsAuthenticated)
         {
             Nav.NavigateTo("/login");
             return;
         }
 
-        await LoadDataAsync();
+        if (_loading)
+            await LoadDataAsync();
     }
 
     private async Task LoadDataAsync()

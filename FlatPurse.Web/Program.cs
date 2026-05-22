@@ -24,7 +24,6 @@ app.UseStaticFiles();
 app.UseAntiforgery();
 
 app.MapRazorComponents<FlatPurse.Components.App>()
-    .AddInteractiveServerRenderMode()
-    .AddAdditionalAssemblies(typeof(FlatPurse.Components.App).Assembly);
+    .AddInteractiveServerRenderMode();
 
 app.Run();

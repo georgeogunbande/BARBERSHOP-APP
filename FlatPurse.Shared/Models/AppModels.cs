@@ -118,6 +118,7 @@ public record SendEmailRequest(Guid ClientId, string Subject, string Body);
 public record BlastRequest(string Message, List<ClientTag>? Tags, ChurnRisk? ChurnRisk);
 
 public record MessageTemplateDto(Guid Id, string Name, string Subject, string Body, MessageChannel Channel, bool IsActive, DateTime CreatedAt);
+public record ChannelDto(Guid Id, ChannelType Type, ChannelStatus Status, string? Handle, string? ExternalAccountName, DateTime? ConnectedAt);
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 

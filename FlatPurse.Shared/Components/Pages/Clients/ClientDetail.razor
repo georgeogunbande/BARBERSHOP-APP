@@ -17,7 +17,7 @@ else
 {
     <div class="page-header">
         <div>
-            <button class="btn-back" @onclick="() => Nav.NavigateTo("/clients")">&#8592; Clients</button>
+            <button class="btn-back" @onclick="@(() => Nav.NavigateTo("/clients"))">&#8592; Clients</button>
             <h1 class="page-title">@_client.FirstName @_client.LastName</h1>
             <div class="client-tags">
                 @foreach (var tag in _client.Tags)
