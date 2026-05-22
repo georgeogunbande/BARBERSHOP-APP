@@ -1,0 +1,96 @@
+@page "/operations"
+@inject FlatPurse.Services.AppStateService AppState
+@inject NavigationManager Nav
+
+<div class="stat-row">
+    <div class="stat-card">
+        <div class="stat-label">Ops Score</div>
+        <div class="stat-value">82</div>
+        <div class="stat-delta positive">↑ 5 pts this month</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Utilization</div>
+        <div class="stat-value">74%</div>
+        <div class="stat-delta warning">⚠ Target: 85%</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Rebook Rate</div>
+        <div class="stat-value">84%</div>
+        <div class="stat-delta positive">↑ 6% vs last month</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Churn Rate</div>
+        <div class="stat-value">8%</div>
+        <div class="stat-delta positive">↓ 2% this month</div>
+    </div>
+</div>
+
+<div class="main-grid">
+    <div>
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">Staff Utilization</span>
+                <span class="card-badge badge-purple">THIS WEEK</span>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Staff</th><th>Booked</th><th>Utilization</th><th>Revenue</th><th>Rebook Rate</th></tr></thead>
+                    <tbody>
+                        <tr><td>Emma Watson</td><td>6 / 8</td><td>88%</td><td>$1,420</td><td>92%</td></tr>
+                        <tr><td>James Miller</td><td>6 / 8</td><td>76%</td><td>$890</td><td>78%</td></tr>
+                        <tr><td>Zara Ahmed</td><td>5 / 8</td><td>62%</td><td>$537</td><td>85%</td></tr>
+                        <tr><td>Kevin Lee</td><td>4 / 8</td><td>45%</td><td>$320</td><td>70%</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="right-col">
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">Revenue Mix</span>
+            </div>
+            <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+                <div>
+                    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+                        <span>Services</span><span style="font-weight:700">$4,890</span>
+                    </div>
+                    <div class="util-bar" style="width:100%"><div class="util-fill" style="width:85%"></div></div>
+                </div>
+                <div>
+                    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+                        <span>AutoPilot</span><span style="font-weight:700;color:var(--purple)">$340</span>
+                    </div>
+                    <div class="util-bar" style="width:100%"><div class="util-fill" style="width:15%"></div></div>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">Missed Revenue</span>
+                <span class="card-badge badge-amber">OPPORTUNITY</span>
+            </div>
+            <div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;justify-content:space-between;font-size:13px">
+                    <span style="color:var(--text-3)">Unfilled slots value</span>
+                    <span style="font-weight:700;color:var(--amber)">$480</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:13px">
+                    <span style="color:var(--text-3)">Missed upsells</span>
+                    <span style="font-weight:700;color:var(--amber)">$220</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:13px;padding-top:8px;border-top:1px solid var(--border-2)">
+                    <span style="font-weight:700">Total opportunity</span>
+                    <span style="font-weight:800;color:var(--red)">$700</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        if (!AppState.IsAuthenticated) Nav.NavigateTo("/login");
+    }
+}

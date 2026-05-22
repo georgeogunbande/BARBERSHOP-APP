@@ -1,119 +1,198 @@
 @page "/"
 @page "/dashboard"
-@using System.Text.Json
 @using FlatPurse.Models
-@using FlatPurse.Components.Shared
-@inject FlatPurse.Services.DashboardService DashboardService
-@inject FlatPurse.Services.BookingService BookingService
 @inject FlatPurse.Services.AppStateService AppState
 @inject NavigationManager Nav
 
-<div class="page-header">
-    <div>
-        <h1 class="page-title">Dashboard</h1>
-        <p class="page-subtitle">@DateTime.Now.ToString("dddd, MMMM d")</p>
+@if (!AppState.IsAuthenticated)
+{
+    <span></span>
+    return;
+}
+
+<div class="stat-row">
+    <div class="stat-card">
+        <div class="stat-label">Revenue Today</div>
+        <div class="stat-value">$1,085</div>
+        <div class="stat-delta positive">↑ 12% vs yesterday</div>
     </div>
-    <a href="/bookings/new" class="btn btn-primary">+ New Booking</a>
+    <div class="stat-card">
+        <div class="stat-label">Appointments</div>
+        <div class="stat-value">8</div>
+        <div class="stat-delta positive">6 completed · 2 upcoming</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">AutoPilot Saves</div>
+        <div class="stat-value">$340</div>
+        <div class="stat-delta positive">↑ 2 no-shows recovered</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Utilization</div>
+        <div class="stat-value">74%</div>
+        <div class="stat-delta warning">⚠ 2 gaps this afternoon</div>
+    </div>
 </div>
 
-@if (_loading)
-{
-    <LoadingSpinner />
-}
-else
-{
-    <div class="stats-grid">
-        <StatCard Label="Appointments Today" Value="@_appointmentsToday.ToString()" Trend="" />
-        <StatCard Label="Revenue (Projected)" Value="@($"${_revenueProjected:F2}")" Trend="" />
-        <StatCard Label="Pending" Value="@_pendingCount.ToString()" Trend="" />
-    </div>
-
-    <div class="section">
-        <div class="section-header">
-            <h2>Today's Bookings</h2>
-            <a href="/bookings" class="link-subtle">View all</a>
-        </div>
-
-        @if (_recentBookings.Count == 0)
-        {
-            <EmptyState Message="No bookings today yet." />
-        }
-        else
-        {
-            <div class="booking-list">
-                @foreach (var b in _recentBookings)
+<div class="main-grid">
+    <div>
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">Today's Schedule</span>
+                <span class="card-badge badge-purple">8 APPOINTMENTS</span>
+            </div>
+            <div class="schedule-list">
+                @foreach (var appt in _schedule)
                 {
-                    <BookingRow Booking="@b" OnComplete="() => CompleteAsync(b.Id)" OnCancel="() => CancelAsync(b.Id)" />
+                    <div class="schedule-item">
+                        <span class="appt-time">@appt.Time</span>
+                        <div class="appt-avatar" style="background:@appt.Color">@appt.Initials</div>
+                        <div class="appt-info">
+                            <div class="appt-name">@appt.Name</div>
+                            <div class="appt-service">@appt.Service · @appt.Staff</div>
+                        </div>
+                        <span class="appt-price">$@appt.Price</span>
+                        <span class="appt-status status-@appt.Status">@appt.StatusLabel</span>
+                    </div>
                 }
             </div>
-        }
+        </div>
+
+        <div class="card" style="margin-top:14px">
+            <div class="card-header">
+                <span class="card-title">AI Recommendations</span>
+                <span class="card-badge badge-purple">AI POWERED</span>
+            </div>
+            <div class="ai-list">
+                <div class="ai-card">
+                    <div class="ai-type winback">● WINBACK</div>
+                    <div class="ai-card-body">Lisa Park hasn't booked in 60+ days (LTV $4,800). She's at high churn risk. A personalized win-back message could recover her.</div>
+                    <div class="ai-actions">
+                        <button class="ai-btn ai-btn-primary">Send Win-Back</button>
+                        <button class="ai-btn ai-btn-secondary">Dismiss</button>
+                    </div>
+                </div>
+                <div class="ai-card">
+                    <div class="ai-type upsell">● UPSELL</div>
+                    <div class="ai-card-body">Daniel King has never tried Beard Grooming. Given his Cut + Beard history, there's a 78% upsell probability at 12:30 PM today.</div>
+                    <div class="ai-actions">
+                        <button class="ai-btn ai-btn-primary">Suggest at Checkout</button>
+                        <button class="ai-btn ai-btn-secondary">Skip</button>
+                    </div>
+                </div>
+                <div class="ai-card">
+                    <div class="ai-type slot">● SLOT FILLER</div>
+                    <div class="ai-card-body">3:00 PM slot opened up (Marcus cancelled). 4 clients match this time window. AutoPilot can fill it automatically.</div>
+                    <div class="ai-actions">
+                        <button class="ai-btn ai-btn-primary">Fill Now</button>
+                        <button class="ai-btn ai-btn-secondary">Let AutoPilot handle</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-}
+
+    <div class="right-col">
+        <div class="quick-stats">
+            <div class="qs-cell">
+                <div class="qs-label">Week Revenue</div>
+                <div class="qs-value">$5,240</div>
+                <div class="qs-sub">↑ 18% vs last week</div>
+            </div>
+            <div class="qs-cell">
+                <div class="qs-label">New Clients</div>
+                <div class="qs-value">3</div>
+                <div class="qs-sub">This week</div>
+            </div>
+            <div class="qs-cell">
+                <div class="qs-label">Rebook Rate</div>
+                <div class="qs-value">84%</div>
+                <div class="qs-sub">↑ 6% this month</div>
+            </div>
+            <div class="qs-cell">
+                <div class="qs-label">Avg Ticket</div>
+                <div class="qs-value">$136</div>
+                <div class="qs-sub">↑ $12 this week</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">Team Today</span>
+                <span class="card-badge badge-green">4 ACTIVE</span>
+            </div>
+            @foreach (var m in _team)
+            {
+                <div class="team-item">
+                    <div class="team-avatar" style="background:@m.Color">@m.Initials</div>
+                    <div>
+                        <div class="team-name">@m.Name</div>
+                        <div class="team-role">@m.Role</div>
+                        <div class="util-bar" style="width:80px">
+                            <div class="util-fill" style="width:@m.Util%"></div>
+                        </div>
+                    </div>
+                    <div class="team-stat">
+                        <div class="team-rev">$@m.Rev</div>
+                        <div class="team-apts">@m.Apts apts</div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">AutoPilot Today</span>
+                <span class="card-badge badge-green">ACTIVE</span>
+            </div>
+            <div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;justify-content:space-between;font-size:13px">
+                    <span style="color:var(--text-3)">Slots filled</span>
+                    <span style="font-weight:700;color:var(--green)">2</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:13px">
+                    <span style="color:var(--text-3)">Messages sent</span>
+                    <span style="font-weight:700;color:var(--text)">14</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:13px">
+                    <span style="color:var(--text-3)">Revenue recovered</span>
+                    <span style="font-weight:700;color:var(--purple)">$340</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:13px">
+                    <span style="color:var(--text-3)">Review requests</span>
+                    <span style="font-weight:700;color:var(--text)">6</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 @code {
-    private bool _loading = true;
-    private int _appointmentsToday;
-    private decimal _revenueProjected;
-    private int _pendingCount;
-    private List<BookingDto> _recentBookings = new();
+    private record ApptRow(string Time, string Initials, string Color, string Name, string Service, string Staff, int Price, string Status, string StatusLabel);
+    private record TeamMember(string Initials, string Color, string Name, string Role, int Rev, int Apts, int Util);
 
-    protected override async Task OnInitializedAsync()
+    private readonly List<ApptRow> _schedule = new()
+    {
+        new("9:00",  "SJ", "#534AB7", "Sarah Johnson",  "Color + Cut",        "Emma",  185, "done",      "Done"),
+        new("10:30", "MC", "#DB2777", "Michael Chen",   "Beard Trim",         "James", 35,  "done",      "Done"),
+        new("11:15", "JL", "#0891B2", "Jamie Lee",      "Balayage",           "Emma",  220, "next",      "Up Next"),
+        new("12:30", "DK", "#D97706", "Daniel King",    "Skin Fade",          "James", 50,  "risk",      "Risk"),
+        new("14:00", "EM", "#9333EA", "Emma Mitchell",  "Highlights + Style", "Emma",  240, "confirmed", "Confirmed"),
+        new("15:30", "LP", "#DC2626", "Lisa Park",      "Balayage",           "Emma",  285, "confirmed", "Confirmed"),
+        new("16:30", "MT", "#0284C7", "Marcus Taylor",  "Cut + Beard",        "James", 65,  "risk",      "Risk"),
+        new("17:00", "AK", "#16A34A", "Aisha Khan",     "Signature Cut",      "Zara",  45,  "confirmed", "Confirmed"),
+    };
+
+    private readonly List<TeamMember> _team = new()
+    {
+        new("EW", "#534AB7", "Emma Watson",  "Senior Stylist", 1420, 6, 88),
+        new("JM", "#DB2777", "James Miller", "Barber",          890, 7, 76),
+        new("ZA", "#16A34A", "Zara Ahmed",   "Colorist",        537, 4, 62),
+        new("KL", "#9333EA", "Kevin Lee",    "Stylist",         320, 3, 45),
+    };
+
+    protected override void OnInitialized()
     {
         if (!AppState.IsAuthenticated)
-        {
             Nav.NavigateTo("/login");
-            return;
-        }
-
-        await LoadDataAsync();
-    }
-
-    private async Task LoadDataAsync()
-    {
-        _loading = true;
-        StateHasChanged();
-
-        var brief = await DashboardService.GetTodayBriefAsync();
-        if (brief != null)
-        {
-            var json = JsonSerializer.Serialize(brief);
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-            if (root.TryGetProperty("appointmentsToday", out var appt))
-                _appointmentsToday = appt.GetInt32();
-            if (root.TryGetProperty("revenueTodayProjected", out var rev))
-                _revenueProjected = rev.GetDecimal();
-            if (root.TryGetProperty("pendingCount", out var pending))
-                _pendingCount = pending.GetInt32();
-        }
-
-        var today = DateTime.Today;
-        var bookingsResult = await BookingService.GetBookingsAsync(from: today, to: today.AddDays(1), limit: 10);
-        if (bookingsResult != null)
-        {
-            var json = JsonSerializer.Serialize(bookingsResult);
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-            if (root.TryGetProperty("items", out var items))
-            {
-                _recentBookings = JsonSerializer.Deserialize<List<BookingDto>>(items.GetRawText(),
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
-            }
-        }
-
-        _loading = false;
-        StateHasChanged();
-    }
-
-    private async Task CompleteAsync(Guid id)
-    {
-        await BookingService.CompleteBookingAsync(id);
-        await LoadDataAsync();
-    }
-
-    private async Task CancelAsync(Guid id)
-    {
-        await BookingService.CancelBookingAsync(id);
-        await LoadDataAsync();
     }
 }

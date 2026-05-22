@@ -1,0 +1,71 @@
+@page "/reports"
+@inject FlatPurse.Services.AppStateService AppState
+@inject NavigationManager Nav
+
+<div class="stat-row">
+    <div class="stat-card">
+        <div class="stat-label">Month Revenue</div>
+        <div class="stat-value">$18,450</div>
+        <div class="stat-delta positive">↑ 22% vs last month</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Total Clients</div>
+        <div class="stat-value">248</div>
+        <div class="stat-delta positive">+14 new this month</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Appointments</div>
+        <div class="stat-value">142</div>
+        <div class="stat-delta positive">↑ 18% vs last month</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Avg Rating</div>
+        <div class="stat-value">4.9★</div>
+        <div class="stat-delta positive">32 new reviews</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Revenue Trend (Last 8 Weeks)</span>
+        <span class="card-badge badge-purple">MONTHLY</span>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Period</th><th>Revenue</th><th>Appointments</th><th>New Clients</th><th>AutoPilot Revenue</th></tr></thead>
+            <tbody>
+                @foreach (var row in _trend)
+                {
+                    <tr>
+                        <td>@row.Label</td>
+                        <td style="font-family:var(--mono);font-weight:700">$@row.Revenue.ToString("N0")</td>
+                        <td>@row.Apts</td>
+                        <td style="color:var(--green)">+@row.NewClients</td>
+                        <td style="color:var(--purple);font-weight:700">$@row.AutoPilotRev.ToString("N0")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    private record RevenueRow(string Label, decimal Revenue, int Apts, int NewClients, decimal AutoPilotRev);
+
+    private readonly List<RevenueRow> _trend = new()
+    {
+        new("Week Apr 7",  3840, 28, 2, 280),
+        new("Week Apr 14", 4120, 31, 3, 340),
+        new("Week Apr 21", 3980, 29, 1, 310),
+        new("Week Apr 28", 4510, 34, 4, 420),
+        new("Week May 5",  4890, 36, 3, 460),
+        new("Week May 12", 5240, 38, 5, 510),
+        new("Week May 19", 5120, 37, 4, 490),
+        new("Week May 22", 1085, 8,  1, 340),
+    };
+
+    protected override void OnInitialized()
+    {
+        if (!AppState.IsAuthenticated) Nav.NavigateTo("/login");
+    }
+}

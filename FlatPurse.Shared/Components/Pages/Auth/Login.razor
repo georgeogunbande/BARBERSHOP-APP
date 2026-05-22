@@ -1,70 +1,68 @@
 @page "/login"
-@layout FlatPurse.Components.Layout.AuthLayout
+@using FlatPurse.Models
 @inject FlatPurse.Services.AuthService AuthService
 @inject FlatPurse.Services.AppStateService AppState
 @inject NavigationManager Nav
 
-<div class="auth-form-wrapper">
-    <h2>Sign in</h2>
+<div class="auth-card">
+    <div class="auth-logo">
+        <div class="auth-logo-mark">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+            </svg>
+        </div>
+        <span class="auth-logo-text">FlatPurse Flow</span>
+    </div>
+    <h1 class="auth-title">Welcome back</h1>
+    <p class="auth-sub">Sign in to your barbershop dashboard</p>
 
-    @if (!string.IsNullOrEmpty(_errorMessage))
+    @if (!string.IsNullOrEmpty(_error))
     {
-        <div class="alert alert-error">@_errorMessage</div>
+        <div class="error-msg">@_error</div>
     }
 
-    <EditForm Model="@_model" OnValidSubmit="HandleLogin">
+    <EditForm Model="_model" OnValidSubmit="LoginAsync">
         <DataAnnotationsValidator />
-
         <div class="form-group">
-            <label for="email">Email</label>
-            <InputText id="email" class="form-control" @bind-Value="_model.Email" type="email" placeholder="you@example.com" />
+            <label class="form-label">Email</label>
+            <InputText class="form-input" @bind-Value="_model.Email" placeholder="you@barbershop.com" type="email" />
         </div>
-
         <div class="form-group">
-            <label for="password">Password</label>
-            <InputText id="password" class="form-control" @bind-Value="_model.Password" type="password" placeholder="••••••••" />
+            <label class="form-label">Password</label>
+            <InputText class="form-input" @bind-Value="_model.Password" placeholder="••••••••" type="password" />
         </div>
-
-        <button type="submit" class="btn btn-primary btn-full" disabled="@_loading">
-            @if (_loading) { <span>Signing in...</span> } else { <span>Sign in</span> }
+        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:11px" disabled="@_loading">
+            @(_loading ? "Signing in…" : "Sign In")
         </button>
     </EditForm>
 
-    <p class="auth-footer-link">
-        Don't have an account? <a href="/register">Create one</a>
-    </p>
+    <div class="auth-footer">
+        Don't have an account? <a href="/register" class="auth-link">Get started free</a>
+    </div>
 </div>
 
 @code {
-    private readonly LoginModel _model = new();
-    private string? _errorMessage;
+    private class LoginModel { public string Email { get; set; } = ""; public string Password { get; set; } = ""; }
+    private LoginModel _model = new();
+    private string? _error;
     private bool _loading;
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        if (AppState.IsAuthenticated)
-            Nav.NavigateTo("/dashboard");
+        if (AppState.IsAuthenticated) Nav.NavigateTo("/");
     }
 
-    private async Task HandleLogin()
+    private async Task LoginAsync()
     {
         _loading = true;
-        _errorMessage = null;
-        StateHasChanged();
-
-        var success = await AuthService.LoginAsync(_model.Email, _model.Password);
-        if (success)
-            Nav.NavigateTo("/dashboard");
-        else
-            _errorMessage = "Invalid email or password. Please try again.";
-
-        _loading = false;
-        StateHasChanged();
-    }
-
-    private class LoginModel
-    {
-        public string Email { get; set; } = string.Empty;
-        public string Password { get; set; } = string.Empty;
+        _error = null;
+        try
+        {
+            var ok = await AuthService.LoginAsync(_model.Email, _model.Password);
+            if (ok) Nav.NavigateTo("/");
+            else _error = "Invalid email or password.";
+        }
+        catch { _error = "Unable to connect. Please try again."; }
+        finally { _loading = false; }
     }
 }
