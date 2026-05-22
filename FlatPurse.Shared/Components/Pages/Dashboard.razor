@@ -1,0 +1,119 @@
+@page "/"
+@page "/dashboard"
+@using System.Text.Json
+@using FlatPurse.Models
+@using FlatPurse.Components.Shared
+@inject FlatPurse.Services.DashboardService DashboardService
+@inject FlatPurse.Services.BookingService BookingService
+@inject FlatPurse.Services.AppStateService AppState
+@inject NavigationManager Nav
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-subtitle">@DateTime.Now.ToString("dddd, MMMM d")</p>
+    </div>
+    <a href="/bookings/new" class="btn btn-primary">+ New Booking</a>
+</div>
+
+@if (_loading)
+{
+    <LoadingSpinner />
+}
+else
+{
+    <div class="stats-grid">
+        <StatCard Label="Appointments Today" Value="@_appointmentsToday.ToString()" Trend="" />
+        <StatCard Label="Revenue (Projected)" Value="@($"${_revenueProjected:F2}")" Trend="" />
+        <StatCard Label="Pending" Value="@_pendingCount.ToString()" Trend="" />
+    </div>
+
+    <div class="section">
+        <div class="section-header">
+            <h2>Today's Bookings</h2>
+            <a href="/bookings" class="link-subtle">View all</a>
+        </div>
+
+        @if (_recentBookings.Count == 0)
+        {
+            <EmptyState Message="No bookings today yet." />
+        }
+        else
+        {
+            <div class="booking-list">
+                @foreach (var b in _recentBookings)
+                {
+                    <BookingRow Booking="@b" OnComplete="() => CompleteAsync(b.Id)" OnCancel="() => CancelAsync(b.Id)" />
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private int _appointmentsToday;
+    private decimal _revenueProjected;
+    private int _pendingCount;
+    private List<BookingDto> _recentBookings = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AppState.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var brief = await DashboardService.GetTodayBriefAsync();
+        if (brief != null)
+        {
+            var json = JsonSerializer.Serialize(brief);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("appointmentsToday", out var appt))
+                _appointmentsToday = appt.GetInt32();
+            if (root.TryGetProperty("revenueTodayProjected", out var rev))
+                _revenueProjected = rev.GetDecimal();
+            if (root.TryGetProperty("pendingCount", out var pending))
+                _pendingCount = pending.GetInt32();
+        }
+
+        var today = DateTime.Today;
+        var bookingsResult = await BookingService.GetBookingsAsync(from: today, to: today.AddDays(1), limit: 10);
+        if (bookingsResult != null)
+        {
+            var json = JsonSerializer.Serialize(bookingsResult);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("items", out var items))
+            {
+                _recentBookings = JsonSerializer.Deserialize<List<BookingDto>>(items.GetRawText(),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+            }
+        }
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task CompleteAsync(Guid id)
+    {
+        await BookingService.CompleteBookingAsync(id);
+        await LoadDataAsync();
+    }
+
+    private async Task CancelAsync(Guid id)
+    {
+        await BookingService.CancelBookingAsync(id);
+        await LoadDataAsync();
+    }
+}

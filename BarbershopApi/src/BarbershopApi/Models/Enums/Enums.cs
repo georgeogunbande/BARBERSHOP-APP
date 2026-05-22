@@ -6,7 +6,9 @@ public enum BookingStatus { Pending, Confirmed, InProgress, Completed, Cancelled
 
 public enum PaymentStatus { Pending, Succeeded, Failed, Refunded, PartialRefund }
 
-public enum PaymentMethod { Card, Cash, TapToPay, PaymentLink }
+public enum PaymentMethod { Card, Cash, TapToPay, PaymentLink, Interac }
+
+public enum DepositStatus { None, PendingInterac, Confirmed }
 
 public enum ClientTag { VIP, NewClient, Inactive, HighSpender, FrequentCanceller }
 

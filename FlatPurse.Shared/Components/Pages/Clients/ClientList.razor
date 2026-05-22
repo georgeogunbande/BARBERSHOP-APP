@@ -1,0 +1,132 @@
+@page "/clients"
+@using FlatPurse.Models
+@using FlatPurse.Components.Shared
+@inject FlatPurse.Services.ClientService ClientService
+@inject FlatPurse.Services.AppStateService AppState
+@inject NavigationManager Nav
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Clients</h1>
+        <p class="page-subtitle">@_total clients total</p>
+    </div>
+    <button class="btn btn-primary" @onclick="() => _showAddModal = true">+ Add Client</button>
+</div>
+
+<div class="filters-bar">
+    <input class="search-input" type="search" placeholder="Search clients..." @bind="_searchQuery" @bind:event="oninput" @onkeyup="OnSearchKeyUp" />
+
+    <select class="filter-select" @bind="_selectedTag" @bind:after="LoadClientsAsync">
+        <option value="">All Tags</option>
+        @foreach (var tag in Enum.GetValues<ClientTag>())
+        {
+            <option value="@tag">@tag</option>
+        }
+    </select>
+
+    <select class="filter-select" @bind="_selectedRisk" @bind:after="LoadClientsAsync">
+        <option value="">All Risk Levels</option>
+        @foreach (var risk in Enum.GetValues<ChurnRisk>())
+        {
+            <option value="@risk">@risk</option>
+        }
+    </select>
+</div>
+
+@if (_loading)
+{
+    <LoadingSpinner />
+}
+else if (_clients.Count == 0)
+{
+    <EmptyState Message="No clients found. Try adjusting your filters." />
+}
+else
+{
+    <div class="client-grid">
+        @foreach (var client in _clients)
+        {
+            <ClientCard Client="@client" OnClick="() => Nav.NavigateTo($"/clients/{client.Id}")" />
+        }
+    </div>
+
+    <div class="pagination">
+        <button class="btn btn-ghost" disabled="@(_page <= 1)" @onclick="PrevPage">Previous</button>
+        <span>Page @_page</span>
+        <button class="btn btn-ghost" disabled="@(_clients.Count < _limit)" @onclick="NextPage">Next</button>
+    </div>
+}
+
+@code {
+    private List<ClientDto> _clients = new();
+    private int _total;
+    private int _page = 1;
+    private const int _limit = 50;
+    private bool _loading = true;
+    private string _searchQuery = string.Empty;
+    private string _selectedTag = string.Empty;
+    private string _selectedRisk = string.Empty;
+    private bool _showAddModal;
+    private System.Timers.Timer? _debounceTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AppState.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+        await LoadClientsAsync();
+    }
+
+    private void OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        _debounceTimer?.Stop();
+        _debounceTimer = new System.Timers.Timer(400);
+        _debounceTimer.Elapsed += async (_, _) =>
+        {
+            _debounceTimer.Stop();
+            await InvokeAsync(async () =>
+            {
+                _page = 1;
+                await LoadClientsAsync();
+            });
+        };
+        _debounceTimer.Start();
+    }
+
+    private async Task LoadClientsAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        if (!string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            var results = await ClientService.SearchClientsAsync(_searchQuery);
+            _clients = results?.ToList() ?? new();
+            _total = _clients.Count;
+        }
+        else
+        {
+            ClientTag? tag = Enum.TryParse<ClientTag>(_selectedTag, out var t) ? t : null;
+            ChurnRisk? risk = Enum.TryParse<ChurnRisk>(_selectedRisk, out var r) ? r : null;
+            var result = await ClientService.GetClientsAsync(_page, _limit, tag: tag, churnRisk: risk);
+            _clients = result?.Items ?? new();
+            _total = result?.Total ?? 0;
+        }
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task PrevPage()
+    {
+        if (_page > 1) { _page--; await LoadClientsAsync(); }
+    }
+
+    private async Task NextPage()
+    {
+        _page++;
+        await LoadClientsAsync();
+    }
+}

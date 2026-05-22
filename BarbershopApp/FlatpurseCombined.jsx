@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { api, setToken, getToken, clearToken } from './lib/api.js';
+import { login, logout, getMe } from './lib/auth.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // FLATPURSE FLOW — FULL APP
@@ -41,6 +43,93 @@ const T = {
 };
 
 const f = "'DM Sans','Instrument Sans',sans-serif";
+
+// ── Service Worker registration ─────────────────────────────────────
+if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
+
+// ── IndexedDB offline queue ──────────────────────────────────────────
+const IDB_NAME = "fpf-offline";
+const IDB_STORE = "sync_queue";
+
+function openOfflineDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(IDB_STORE))
+        db.createObjectStore(IDB_STORE, { keyPath: "id", autoIncrement: true });
+    };
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = (e) => reject(e.target.error);
+  });
+}
+
+async function queueOfflineOp(type, payload) {
+  try {
+    const db = await openOfflineDB();
+    await new Promise((res, rej) => {
+      const tx = db.transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).add({ type, payload, ts: Date.now() });
+      tx.oncomplete = res;
+      tx.onerror = (e) => rej(e.target.error);
+    });
+  } catch {}
+}
+
+async function flushOfflineQueue() {
+  try {
+    const db = await openOfflineDB();
+    const items = await new Promise((res, rej) => {
+      const tx = db.transaction(IDB_STORE, "readonly");
+      const req = tx.objectStore(IDB_STORE).getAll();
+      req.onsuccess = (e) => res(e.target.result);
+      req.onerror = (e) => rej(e.target.error);
+    });
+    if (!items.length) return;
+    const r = await fetch("/api/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
+    });
+    if (r.ok) {
+      const tx = (await openOfflineDB()).transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).clear();
+    }
+  } catch {}
+}
+
+// ── Online status hook ───────────────────────────────────────────────
+function useOnlineStatus() {
+  const [isOnline, setIsOnline] = useState(
+    typeof navigator !== "undefined" ? navigator.onLine : true
+  );
+  useEffect(() => {
+    const up = () => { setIsOnline(true); flushOfflineQueue(); };
+    const down = () => setIsOnline(false);
+    window.addEventListener("online", up);
+    window.addEventListener("offline", down);
+    return () => {
+      window.removeEventListener("online", up);
+      window.removeEventListener("offline", down);
+    };
+  }, []);
+  return isOnline;
+}
+
+// ── Deposit rules engine ─────────────────────────────────────────────
+function getDepositRule(client) {
+  if (!client) return { required: false, recommended: false, reason: null };
+  const noShowCount = client.noShowCount ??
+    (client.visits_data || []).filter(v => v.status === "no-show").length;
+  if (noShowCount >= 2) return { required: true, recommended: true, reason: "2+ no-shows" };
+  if ((client.visits === 0 || (client.visits_data || []).length === 0) && !client.savedCard)
+    return { required: false, recommended: true, reason: "new-client" };
+  return { required: false, recommended: false, reason: null };
+}
 
 // ── Standalone logo mark — unique gradient ID per render instance ──
 let _logoCount = 0;
@@ -286,6 +375,8 @@ const CLIENTS_DB = [
     visits_data: [
       { service: "Signature Cut", date: "Mar 20", staff: "John", duration: "45 min", price: 45, tip: 5, status: "completed" },
       { service: "Signature Cut", date: "Feb 1", staff: "John", duration: "45 min", price: 45, tip: 5, status: "completed" },
+      { service: "Signature Cut", date: "Jan 5", staff: "John", duration: "45 min", price: 45, tip: 0, status: "no-show" },
+      { service: "Signature Cut", date: "Dec 10", staff: "John", duration: "45 min", price: 45, tip: 0, status: "no-show" },
     ],
     messages: [],
     payments: [],
@@ -818,26 +909,22 @@ function CustomerDetailScreen({ t, onClose, onBook, client }) {
                     const lastVisit = c.visits_data?.[0];
                     const lastService = lastVisit?.service || "their last service";
                     const daysSince = Math.floor(
-                      (Date.now() - new Date(lastVisit?.date + " 2025").getTime()) / (1000 * 60 * 60 * 24)
+                      (new Date() - new Date(lastVisit?.date || Date.now())) / (1000 * 60 * 60 * 24)
                     );
                     try {
-                      const response = await fetch("https://api.anthropic.com/v1/messages", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          model: "claude-sonnet-4-20250514",
-                          max_tokens: 200,
-                          messages: [{
-                            role: "user",
-                            content: `Write a warm 2-sentence SMS win-back message for ${c.name}, who hasn't visited in ${daysSince} days. Their last service was ${lastService}. Their lifetime value is $${c.ltv}. Offer 15% off their next visit. Business name: Stride Cuts, Edmonton. Keep it personal, not salesy. No emojis. No quotes around the message.`
-                          }]
-                        })
-                      });
+                      const response = await api.post('/ai/winback/generate', {
+                          clientId: "00000000-0000-0000-0000-000000000000",
+                          clientName: c.name,
+                          lastService: lastService,
+                          daysSince: daysSince,
+                          ltv: c.ltv,
+                        });
                       const data = await response.json();
-                      const message = data.content?.[0]?.text || "";
-                      console.log("✅ AI win-back for", c.name, "→", message);
+                      const message = data.message_draft || "We'd love to see you back!";
+                      console.log("AI win-back generated:", message);
+                      await sendWinBackSMS(c.phone, message);
                     } catch (err) {
-                      console.error("Win-back API error:", err);
+                      console.error("Win-back generation failed:", err);
                     }
                     setWinbackSent(true);
                   }}
@@ -853,7 +940,7 @@ function CustomerDetailScreen({ t, onClose, onBook, client }) {
                   {winbackSent === true
                     ? "✓ Win-back sent"
                     : winbackSent === "sending"
-                    ? "Generating message..."
+                    ? "Generating…"
                     : "Send win-back now →"}
                 </button>
               )}
@@ -954,8 +1041,14 @@ function NewAppointmentOverlay({ t, onClose, onSave }) {
   const [date, setDate] = useState("Thu May 8");
   const [time, setTime] = useState("2:00 PM");
   const [notes, setNotes] = useState("");
-  const [requireDeposit, setRequireDeposit] = useState(true);
   const [sendSMS, setSendSMS] = useState(true);
+  const [depositPct, setDepositPct] = useState(25);
+  const depositRule = getDepositRule(selectedClient);
+  const [requireDeposit, setRequireDeposit] = useState(true);
+  useEffect(() => {
+    if (depositRule.required) setRequireDeposit(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClient?.id ?? selectedClient?.name]);
 
   const filteredClients = ALL_CLIENTS.filter(c =>
     clientSearch.length > 0 && c.name.toLowerCase().includes(clientSearch.toLowerCase())
@@ -1113,12 +1206,35 @@ function NewAppointmentOverlay({ t, onClose, onSave }) {
           <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Allergies, preferences, special requests..." style={{ ...inputStyle, minHeight: 72, resize: "none", display: "block", lineHeight: 1.5 }} />
         </div>
 
+        {selectedClient && depositRule.required && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: 12, background: "#FEE2E2", border: "1px solid #FECACA", marginBottom: 10 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#991B1B" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#991B1B" }}>Deposit required — 2+ prior no-shows</span>
+          </div>
+        )}
+        {selectedClient && !depositRule.required && depositRule.recommended && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: 12, background: "#FEF3C7", border: "1px solid #FDE68A", marginBottom: 10 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#D97706" }}>New client — deposit recommended</span>
+          </div>
+        )}
+
         <div style={{ borderRadius: 14, background: t.card, border: `1px solid ${t.border}`, overflow: "hidden", marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "15px 18px", borderBottom: `1px solid ${t.border}` }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.sub} strokeWidth="2" strokeLinecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
             <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: t.text }}>Require deposit</span>
-            <Toggle on={requireDeposit} onToggle={() => setRequireDeposit(!requireDeposit)} t={t} />
+            <Toggle on={depositRule.required || requireDeposit} onToggle={() => !depositRule.required && setRequireDeposit(!requireDeposit)} t={t} />
           </div>
+          {(depositRule.required || requireDeposit) && (
+            <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", borderBottom: `1px solid ${t.border}` }}>
+              <span style={{ fontSize: 13, color: t.sub, flex: 1 }}>Deposit %</span>
+              <div style={{ display: "flex", gap: 6 }}>
+                {[10, 25, 50].map(p => (
+                  <button key={p} onClick={() => setDepositPct(p)} style={{ padding: "5px 12px", borderRadius: 8, border: `${depositPct===p?2:1}px solid ${depositPct===p?t.accent:t.border}`, background: depositPct===p?t.accentSoft:t.card, color: depositPct===p?t.accentText:t.text, fontSize: 12, fontWeight: depositPct===p?700:500, cursor: "pointer", fontFamily: f }}>{p}%</button>
+                ))}
+              </div>
+            </div>
+          )}
           <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "15px 18px" }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.sub} strokeWidth="2" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: t.text }}>Send confirmation SMS</span>
@@ -1142,11 +1258,13 @@ function NewAppointmentOverlay({ t, onClose, onSave }) {
 // ═══════════════════════════════════════════════════════════════════
 // CLOSE-OUT MODAL — Tap to Pay · Payment Link · Card on File · Cash
 // ═══════════════════════════════════════════════════════════════════
-function CloseOutModal({ t, apt, tipPct, setTipPct, tipAmount, grandTotal, sendReceipt, setSendReceipt, onComplete, onClose }) {
-  const [payMethod, setPayMethod] = useState(null); // null | "tap" | "link" | "card" | "cash"
+function CloseOutModal({ t, apt, tipPct, setTipPct, tipAmount, grandTotal, sendReceipt, setSendReceipt, onComplete, onClose, isOnline = true }) {
+  const [payMethod, setPayMethod] = useState(null); // null | "tap" | "link" | "card" | "cash" | "interac"
   const [linkSent, setLinkSent] = useState(false);
   const [tapState, setTapState] = useState("idle"); // idle | scanning | done
   const [linkCopied, setLinkCopied] = useState(false);
+  const [interacRef] = useState(`FPF-${Math.random().toString(36).slice(2,10).toUpperCase()}`);
+  const [interacMarked, setInteracMarked] = useState(false);
 
   const PAY_METHODS = [
     {
@@ -1160,10 +1278,11 @@ function CloseOutModal({ t, apt, tipPct, setTipPct, tipAmount, grandTotal, sendR
         </svg>
       ),
       label: "Tap to Pay",
-      sub: "NFC · iPhone or terminal",
-      color: t.accentText,
-      bg: t.accentSoft,
-      border: t.accent,
+      sub: isOnline ? "NFC · iPhone or terminal" : "Network required",
+      color: isOnline ? t.accentText : t.muted,
+      bg: isOnline ? t.accentSoft : t.inputBg,
+      border: isOnline ? t.accent : t.border,
+      disabled: !isOnline,
     },
     {
       id: "link",
@@ -1174,10 +1293,11 @@ function CloseOutModal({ t, apt, tipPct, setTipPct, tipAmount, grandTotal, sendR
         </svg>
       ),
       label: "Payment Link",
-      sub: "Send via SMS or WhatsApp",
-      color: t.blueText,
-      bg: t.blueBg,
-      border: t.blue,
+      sub: isOnline ? "Send via SMS or WhatsApp" : "Network required",
+      color: isOnline ? t.blueText : t.muted,
+      bg: isOnline ? t.blueBg : t.inputBg,
+      border: isOnline ? t.blue : t.border,
+      disabled: !isOnline,
     },
     {
       id: "card",
@@ -1208,6 +1328,20 @@ function CloseOutModal({ t, apt, tipPct, setTipPct, tipAmount, grandTotal, sendR
       bg: t.yellowBg,
       border: t.yellow,
     },
+    {
+      id: "interac",
+      icon: (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          <polyline points="9 22 9 12 15 12 15 22"/>
+        </svg>
+      ),
+      label: "Interac",
+      sub: "e-Transfer · zero fee",
+      color: t.greenText,
+      bg: t.greenBg,
+      border: t.green,
+    },
   ];
 
   const handleTap = () => {
@@ -1224,6 +1358,14 @@ function CloseOutModal({ t, apt, tipPct, setTipPct, tipAmount, grandTotal, sendR
       <div style={{ width: "100%", background: t.bg, borderRadius: "22px 22px 0 0", padding: "20px 20px 32px", animation: "slideUp 0.28s cubic-bezier(0.32,0.72,0,1) both", maxHeight: "90%", overflowY: "auto" }}>
         {/* Handle */}
         <div style={{ width: 40, height: 4, borderRadius: 2, background: t.border, margin: "0 auto 18px" }} />
+
+        {/* Offline badge */}
+        {!isOnline && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 10, background: "#FEF3C7", border: "1px solid #F59E0B", marginBottom: 12 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#D97706" }}>Offline mode — Tap to Pay &amp; Payment Link unavailable</span>
+          </div>
+        )}
 
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
@@ -1257,8 +1399,9 @@ function CloseOutModal({ t, apt, tipPct, setTipPct, tipAmount, grandTotal, sendR
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
           {PAY_METHODS.map(pm => {
             const on = payMethod === pm.id;
+            const disabled = pm.disabled === true;
             return (
-              <button key={pm.id} onClick={() => { setPayMethod(pm.id); setLinkSent(false); setTapState("idle"); }} style={{ padding: "12px 14px", borderRadius: 14, border: `${on?2:1}px solid ${on?pm.border:t.border}`, background: on?pm.bg:t.card, cursor: "pointer", fontFamily: f, textAlign: "left", transition: "all 0.15s", display: "flex", flexDirection: "column", gap: 6 }}>
+              <button key={pm.id} onClick={() => { if (!disabled) { setPayMethod(pm.id); setLinkSent(false); setTapState("idle"); }}} style={{ padding: "12px 14px", borderRadius: 14, border: `${on?2:1}px solid ${on?pm.border:t.border}`, background: disabled ? t.inputBg : (on?pm.bg:t.card), cursor: disabled ? "not-allowed" : "pointer", fontFamily: f, textAlign: "left", transition: "all 0.15s", display: "flex", flexDirection: "column", gap: 6, opacity: disabled ? 0.5 : 1 }}>
                 <div style={{ color: on?pm.color:t.sub }}>{pm.icon}</div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: on?pm.color:t.text }}>{pm.label}</div>
                 <div style={{ fontSize: 11, color: t.muted, lineHeight: 1.3 }}>{pm.sub}</div>
@@ -1352,6 +1495,19 @@ function CloseOutModal({ t, apt, tipPct, setTipPct, tipAmount, grandTotal, sendR
           </div>
         )}
 
+        {payMethod === "interac" && (
+          <div style={{ borderRadius: 14, background: t.greenBg, border: `1px solid ${t.green}20`, padding: "14px 16px", marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: t.greenText, marginBottom: 8 }}>Interac e-Transfer · ${grandTotal}</div>
+            <div style={{ fontSize: 12, color: t.sub, marginBottom: 4 }}>Reference: <strong style={{ color: t.text }}>{interacRef}</strong></div>
+            <div style={{ fontSize: 12, color: t.sub, marginBottom: 12 }}>Client sends ${grandTotal} to your deposit email with this reference code.</div>
+            <button
+              onClick={() => { setInteracMarked(true); queueOfflineOp("interac_closeout", { ref: interacRef, amount: grandTotal }); }}
+              style={{ width: "100%", padding: "10px 0", borderRadius: 10, background: interacMarked ? t.card : t.green, border: `1px solid ${t.green}`, cursor: "pointer", fontFamily: f, fontSize: 13, fontWeight: 700, color: interacMarked ? t.greenText : "#fff" }}>
+              {interacMarked ? "✓ Marked as received" : "Mark as received"}
+            </button>
+          </div>
+        )}
+
         {/* Receipt SMS toggle */}
         <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 16px", borderRadius: 12, background: t.card, border: `1px solid ${t.border}`, marginBottom: 16 }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={t.sub} strokeWidth="2" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -1368,6 +1524,8 @@ function CloseOutModal({ t, apt, tipPct, setTipPct, tipAmount, grandTotal, sendR
             ? `✓ Payment received · ${grandTotal}`
             : payMethod === "link" && linkSent
             ? `Link sent · mark complete`
+            : payMethod === "interac" && interacMarked
+            ? `✓ Interac received · mark complete`
             : payMethod
             ? `Complete · Collect $${grandTotal}`
             : "Choose a payment method"}
@@ -1383,6 +1541,7 @@ function AppointmentDetail({ t, appointment, onClose, onComplete }) {
   const [tipPct, setTipPct] = useState(20);
   const [sendReceipt, setSendReceipt] = useState(true);
   const [completed, setCompleted] = useState(false);
+  const isOnline = useOnlineStatus();
 
   const apt = appointment || {
     client: { name: "Sarah Johnson", initials: "SJ", vip: true, visits: 24, ltv: 4200, color: "#534AB7" },
@@ -1514,6 +1673,7 @@ function AppointmentDetail({ t, appointment, onClose, onComplete }) {
           sendReceipt={sendReceipt} setSendReceipt={setSendReceipt}
           onComplete={() => { setShowCompleteModal(false); setCompleted(true); }}
           onClose={() => setShowCompleteModal(false)}
+          isOnline={isOnline}
         />
       )}
     </div>
@@ -1659,6 +1819,9 @@ function BStep3({ t, service, booking, onConfirm, onBack }) {
   const [requireDeposit,   setRequireDeposit]   = useState(true);
   const [sendConfirmation, setSendConfirmation] = useState(true);
   const [saveCard,         setSaveCard]         = useState(false);
+  const [depositMethod,    setDepositMethod]    = useState("card"); // "card" | "interac"
+  const [interacSent,      setInteracSent]      = useState(false);
+  const bookingRef = useState(() => `FPF-${Math.random().toString(36).slice(2,10).toUpperCase()}`)[0];
 
   // ── Payment ──
   const [cardType,    setCardType]    = useState(null);   // auto-detected from card number
@@ -1762,7 +1925,9 @@ function BStep3({ t, service, booking, onConfirm, onBack }) {
     </div>
   );
 
-  const canPay = rawNum.length >= 15 && expiry.length >= 4 && cvc.length >= 3 && cardHolder.length > 0;
+  const canPay = depositMethod === "interac"
+    ? interacSent
+    : rawNum.length >= 15 && expiry.length >= 4 && cvc.length >= 3 && cardHolder.length > 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: t.bg }}>
@@ -1851,6 +2016,32 @@ function BStep3({ t, service, booking, onConfirm, onBack }) {
             </div>
           ))}
         </div>
+
+        {/* ── PAYMENT METHOD SELECTOR ── */}
+        {requireDeposit && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            {[{ id: "card", label: "💳 Card" }, { id: "interac", label: "🏦 Interac" }].map(m => (
+              <button key={m.id} onClick={() => setDepositMethod(m.id)} style={{ flex: 1, padding: "10px 0", borderRadius: 12, border: `${depositMethod===m.id?2:1}px solid ${depositMethod===m.id?t.accent:t.border}`, background: depositMethod===m.id?t.accentSoft:t.card, color: depositMethod===m.id?t.accentText:t.text, fontSize: 13, fontWeight: depositMethod===m.id?700:500, cursor: "pointer", fontFamily: f }}>
+                {m.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {requireDeposit && depositMethod === "interac" ? (
+          <div style={{ padding: "16px", borderRadius: 14, background: t.greenBg, border: `1px solid ${t.green}20`, marginBottom: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: t.greenText, marginBottom: 8 }}>Send ${depositAmt} via Interac e-Transfer</div>
+            <div style={{ fontSize: 12, color: t.sub, lineHeight: 1.7, marginBottom: 12 }}>
+              1. Send to <strong style={{ color: t.text }}>deposits@yoursalon.com</strong><br/>
+              2. Reference: <strong style={{ color: t.text }}>{bookingRef}</strong><br/>
+              3. Your slot is held for 2 hours after you confirm
+            </div>
+            <button onClick={() => setInteracSent(true)} style={{ width: "100%", padding: "11px 0", borderRadius: 12, background: interacSent ? t.card : t.green, border: `1px solid ${t.green}`, cursor: "pointer", fontFamily: f, fontSize: 13, fontWeight: 700, color: interacSent ? t.greenText : "#fff" }}>
+              {interacSent ? "✓ Transfer sent — slot held" : "I've sent the transfer →"}
+            </button>
+          </div>
+        ) : (
+          <div>
 
         {/* ── PAYMENT ── */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -1998,6 +2189,8 @@ function BStep3({ t, service, booking, onConfirm, onBack }) {
             Secured by <strong style={{ color: t.text }}>Stripe</strong> · 256-bit SSL encryption · PCI compliant
           </span>
         </div>
+          </div>
+        )}
       </div>
 
       {/* ── Pay CTA ── */}
@@ -2279,9 +2472,26 @@ function HomePopulated({ t }) {
           ))}
         </div>
       </div>
-      <button style={{ width: "100%", padding: "16px 20px", border: `1.5px solid ${t.border}`, borderRadius: 16, fontSize: 15, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 20, fontFamily: f, background: t.card, color: t.text, boxShadow: t.shadow }}>
-        <span style={{ color: t.accent }}>✦</span>Fill 4 empty slots now (+$280)
-      </button>
+      {/* ── Trust badge — marketplace-free promise ── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, padding: "10px 16px", borderRadius: 12, background: t.inputBg, border: `1px solid ${t.border}`, marginBottom: 12 }}>
+        {["No marketplace", "No commission", "Your clients, always"].map((txt, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            {i > 0 && <div style={{ width: 3, height: 3, borderRadius: "50%", background: t.muted, opacity: 0.4 }} />}
+            <span style={{ fontSize: 10, fontWeight: 700, color: t.muted, whiteSpace: "nowrap" }}>{txt}</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
+        <button style={{ padding: "16px 12px", border: `1.5px solid ${t.border}`, borderRadius: 16, fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: f, background: t.card, color: t.text, boxShadow: t.shadow }}>
+          <span style={{ color: t.accent }}>✦</span>Fill 4 slots (+$280)
+        </button>
+        <button
+          onClick={() => queueOfflineOp("cash_mode_open", { ts: Date.now() })}
+          style={{ padding: "16px 12px", border: "2px solid #D97706", borderRadius: 16, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: f, background: "#FEF3C7", color: "#D97706", boxShadow: t.shadow }}>
+          💵 Cash Mode
+        </button>
+      </div>
       {[
         { icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.accentText} strokeWidth="2.2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>, bg: t.accentSoft, title: "Today's bookings", meta: "14 of 18 · next at 10:00 AM", badge: null },
         { icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.yellowText} strokeWidth="2.2" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>, bg: t.yellowBg, title: "Needs your eyes", meta: "2 things · Marcus, Lisa", badge: 2 },
@@ -2467,10 +2677,10 @@ function TeamScreen({ t, isSetup }) {
   const [staffDetail, setStaffDetail] = useState(null);
   const [period, setPeriod] = useState("This week");
   const staff = [
-    { initials: "MJ", name: "Marcus Johnson", role: "Stylist", color: "#16A34A", bookings: 19, revenue: "$1,483", alert: "Rebook rate dropped 26 pts" },
-    { initials: "EW", name: "Emma Wilson", role: "Esthetician", color: "#534AB7", bookings: 22, revenue: "$1,870", alert: null },
-    { initials: "JT", name: "John Torres", role: "Massage Therapist", color: "#0891B2", bookings: 16, revenue: "$1,520", alert: null },
-    { initials: "LK", name: "Lisa Kim", role: "Stylist", color: "#DB2777", bookings: 24, revenue: "$2,040", alert: null },
+    { initials: "MJ", name: "Marcus Johnson", role: "Stylist", color: "#16A34A", bookings: 19, revenue: "$1,483", noShows: 2, alert: "Rebook rate dropped 26 pts" },
+    { initials: "EW", name: "Emma Wilson", role: "Esthetician", color: "#534AB7", bookings: 22, revenue: "$1,870", noShows: 0, alert: null },
+    { initials: "JT", name: "John Torres", role: "Massage Therapist", color: "#0891B2", bookings: 16, revenue: "$1,520", noShows: 1, alert: null },
+    { initials: "LK", name: "Lisa Kim", role: "Stylist", color: "#DB2777", bookings: 24, revenue: "$2,040", noShows: 0, alert: null },
   ];
 
   if (staffDetail) {
@@ -2532,7 +2742,13 @@ function TeamScreen({ t, isSetup }) {
         <div key={i} onClick={() => setStaffDetail(s.name)} style={{ padding: "16px 18px", background: t.card, borderRadius: 16, border: `1px solid ${t.border}`, marginBottom: 8, cursor: "pointer", boxShadow: t.shadow }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: s.alert ? 10 : 0 }}>
             <div style={{ width: 46, height: 46, borderRadius: 23, background: s.color, color: "#fff", fontSize: 15, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{s.initials}</div>
-            <div style={{ flex: 1 }}><div style={{ fontSize: 15, fontWeight: 700, color: t.text }}>{s.name}</div><div style={{ fontSize: 12, color: t.sub, marginTop: 2 }}>{s.role} · {s.bookings} bookings · {s.revenue}</div></div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: t.text }}>{s.name}</div>
+              <div style={{ fontSize: 12, color: t.sub, marginTop: 2 }}>{s.role} · {s.bookings} bookings · {s.revenue}</div>
+              <div style={{ fontSize: 11, color: s.noShows > 0 ? "#D97706" : t.muted, marginTop: 2, fontWeight: s.noShows > 0 ? 600 : 400 }}>
+                No-show rate: {s.bookings > 0 ? Math.round(s.noShows / s.bookings * 100) : 0}% ({s.noShows} of {s.bookings})
+              </div>
+            </div>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={t.dim} strokeWidth="2.5" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
           </div>
           {s.alert && <div style={{ padding: "8px 12px", borderRadius: 8, background: t.pinkBg, fontSize: 12, fontWeight: 600, color: t.pinkText }}>⚠️ {s.alert}</div>}
@@ -2552,6 +2768,26 @@ const LISA_BRIEF = {
   lastService: "Balayage",
 };
 
+// ── SMS send helper — wire your Twilio credentials here ──────────
+// In production: move ACCOUNT_SID + AUTH_TOKEN to a server-side
+// edge function (Vercel/Azure Function) so they're never in the client.
+// For now this calls your backend endpoint which proxies to Twilio.
+async function sendWinBackSMS(toPhone, message) {
+  console.log("📱 Sending win-back SMS to", toPhone);
+  console.log("   Message:", message);
+  try {
+    // ── Option A: backend endpoint (Twilio via server) ──
+    const res = await api.post('/messaging/sms/send', { to: toPhone, body: message });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "SMS send failed");
+    console.log("✅ SMS sent:", data.sid);
+    return data.sid;
+  } catch (err) {
+    console.error("❌ SMS send failed:", err);
+    throw err;
+  }
+}
+
 // ── AutoPilotWinBack — standalone card rendered inside AutoPilotScreen ──
 function AutoPilotWinBack({ t }) {
   const [state, setState] = useState("idle"); // idle | sending | sent | error
@@ -2561,21 +2797,17 @@ function AutoPilotWinBack({ t }) {
     if (state !== "idle") return;
     setState("sending");
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 200,
-          messages: [{
-            role: "user",
-            content: `Write a warm 2-sentence SMS win-back message for ${LISA_BRIEF.name}, who hasn't visited in ${LISA_BRIEF.daysSince} days. Her last service was ${LISA_BRIEF.lastService}. Her lifetime value is $${LISA_BRIEF.ltv}. Offer 15% off her next visit. Business name: Stride Cuts, Edmonton. Keep it personal, not salesy. No emojis.`,
-          }],
-        }),
-      });
+      const res = await api.post('/ai/winback/generate', {
+          clientId: "00000000-0000-0000-0000-000000000000",
+          clientName: LISA_BRIEF.name,
+          lastService: LISA_BRIEF.lastService,
+          daysSince: LISA_BRIEF.daysSince,
+          ltv: LISA_BRIEF.ltv,
+        });
       const data = await res.json();
-      const msg = data.content?.[0]?.text || "We'd love to see you back, Lisa!";
+      const msg = data.messageDraft || data.message_draft || "We'd love to see you back, Lisa!";
       console.log("✅ AutoPilot win-back generated:", msg);
+      await sendWinBackSMS(LISA_BRIEF.phone, msg);
       setPreviewMsg(msg);
       setState("sent");
     } catch (err) {
@@ -3392,6 +3624,23 @@ function DailyBrief({ t, onClose, onOpenDashboard }) {
           {metricCard("OPEN SLOTS", "$280", "potential missed", t.pinkText, t.pinkBg, t.pink)}
         </div>
 
+        {/* SMS stats */}
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: t.muted, marginBottom: 10 }}>SMS YESTERDAY</div>
+        <div style={{ padding: "14px 16px", borderRadius: 14, background: t.card, border: `1px solid ${t.border}`, marginBottom: 20, boxShadow: t.shadow }}>
+          <div style={{ display: "flex" }}>
+            {[{ v: "24", l: "Reminders sent" }, { v: "21", l: "Delivered" }, { v: "3", l: "Failed" }].map((s, i) => (
+              <div key={i} style={{ display: "contents" }}>
+                {i > 0 && <div style={{ width: 1, background: t.border, margin: "0 4px" }} />}
+                <div style={{ flex: 1, textAlign: "center" }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: i === 2 ? t.pinkText : t.text }}>{s.v}</div>
+                  <div style={{ fontSize: 10, color: t.muted, marginTop: 2, lineHeight: 1.4 }}>{s.l}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: t.sub, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${t.border}` }}>87.5% delivery rate · 3 failed due to carrier filter</div>
+        </div>
+
         {/* NEEDS YOU — interactive action cards, not static info */}
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: t.muted, marginBottom: 10 }}>NEEDS YOU</div>
 
@@ -3425,21 +3674,17 @@ function DailyBrief({ t, onClose, onOpenDashboard }) {
                       if (winBackSent) return;
                       setWinBackSent("sending");
                       try {
-                        const res = await fetch("https://api.anthropic.com/v1/messages", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            model: "claude-sonnet-4-20250514",
-                            max_tokens: 200,
-                            messages: [{
-                              role: "user",
-                              content: `Write a warm 2-sentence SMS win-back message for ${LISA_BRIEF.name}, who hasn't visited in ${LISA_BRIEF.daysSince} days. Her last service was ${LISA_BRIEF.lastService}. Her lifetime value is $${LISA_BRIEF.ltv}. Offer 15% off her next visit. Business name: Stride Cuts, Edmonton. Keep it personal, not salesy. No emojis.`,
-                            }],
-                          }),
-                        });
+                        const res = await api.post('/ai/winback/generate', {
+                            clientId: "00000000-0000-0000-0000-000000000000",
+                            clientName: LISA_BRIEF.name,
+                            lastService: LISA_BRIEF.lastService,
+                            daysSince: LISA_BRIEF.daysSince,
+                            ltv: LISA_BRIEF.ltv,
+                          });
                         const data = await res.json();
-                        const msg = data.content?.[0]?.text || "We'd love to see you back, Lisa!";
+                        const msg = data.messageDraft || data.message_draft || "We'd love to see you back, Lisa!";
                         console.log("✅ Daily Brief win-back generated:", msg);
+                        await sendWinBackSMS(LISA_BRIEF.phone, msg);
                       } catch (err) {
                         console.error("Daily Brief win-back failed:", err);
                       }
@@ -3771,6 +4016,136 @@ function ServicesPricingScreen({ t, onClose }) {
 // ═══════════════════════════════════════════════════════════════════
 // SETTINGS HUB
 // ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// INTEGRATIONS SCREEN — SMS bundle · A2P 10DLC · Interac settings
+// ═══════════════════════════════════════════════════════════════════
+function IntegrationsScreen({ t, onClose }) {
+  const [smsUsed] = useState(247);
+  const [smsTotal] = useState(1000);
+  const [a2pStatus, setA2pStatus] = useState("unregistered");
+  const [showRegForm, setShowRegForm] = useState(false);
+  const [regForm, setRegForm] = useState({ legalName: "", ein: "", sampleMsg: "Hi [Name], your appointment at [Salon] is confirmed for [Date] at [Time]. Reply STOP to opt out." });
+  const [regSubmitting, setRegSubmitting] = useState(false);
+  const [interacEnabled, setInteracEnabled] = useState(true);
+  const [interacEmail, setInteracEmail] = useState("deposits@yoursalon.com");
+  const smsPct = Math.round(smsUsed / smsTotal * 100);
+
+  const handleRegSubmit = async () => {
+    setRegSubmitting(true);
+    try {
+      await api.post('/messaging/sms/register-10dlc', { legalName: regForm.legalName, ein: regForm.ein });
+      setA2pStatus("pending");
+      setShowRegForm(false);
+    } catch {}
+    setRegSubmitting(false);
+  };
+
+  return (
+    <div style={{ position: "absolute", inset: 0, zIndex: 360, borderRadius: 41, overflow: "hidden", background: t.bg, display: "flex", flexDirection: "column", animation: "slideUp 0.32s cubic-bezier(0.32,0.72,0,1) both" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 28px 0", height: 36, flexShrink: 0 }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: t.statusBar }}>9:42 AM</span>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", padding: "10px 20px 14px", flexShrink: 0 }}>
+        <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", marginRight: 12 }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={t.text} strokeWidth="2.5" strokeLinecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <div style={{ fontSize: 22, fontWeight: 800, color: t.text, letterSpacing: -0.5 }}>Integrations</div>
+      </div>
+      <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: "0 20px 28px" }}>
+
+        {/* ── SMS Bundle ── */}
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: t.muted, marginBottom: 10 }}>SMS PLAN</div>
+        <div style={{ padding: "16px 18px", borderRadius: 16, background: t.card, border: `1px solid ${t.border}`, marginBottom: 20, boxShadow: t.shadow }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: t.text }}>1,000 SMS / month included</div>
+            <div style={{ fontSize: 13, color: smsPct >= 80 ? "#D97706" : t.greenText, fontWeight: 700 }}>{smsPct}% used</div>
+          </div>
+          <div style={{ height: 8, borderRadius: 4, background: t.inputBg, overflow: "hidden", marginBottom: 8 }}>
+            <div style={{ height: "100%", width: `${smsPct}%`, borderRadius: 4, background: smsPct >= 80 ? "#F59E0B" : t.green, transition: "width 0.5s" }} />
+          </div>
+          <div style={{ fontSize: 12, color: t.sub }}>{smsUsed} sent · {smsTotal - smsUsed} remaining this month</div>
+          {smsPct >= 80 && (
+            <button style={{ marginTop: 12, width: "100%", padding: "10px 0", borderRadius: 10, background: "#FEF3C7", border: "1px solid #F59E0B", color: "#D97706", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: f }}>
+              Top up SMS credits →
+            </button>
+          )}
+        </div>
+
+        {/* ── A2P 10DLC ── */}
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: t.muted, marginBottom: 10 }}>CARRIER REGISTRATION (A2P 10DLC)</div>
+        <div style={{ padding: "16px 18px", borderRadius: 16, background: t.card, border: `1px solid ${t.border}`, marginBottom: 12, boxShadow: t.shadow }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: a2pStatus === "registered" ? t.green : a2pStatus === "pending" ? "#F59E0B" : "#EF4444", flexShrink: 0 }} />
+            <div style={{ fontSize: 14, fontWeight: 700, color: t.text, textTransform: "capitalize" }}>{a2pStatus}</div>
+          </div>
+          {a2pStatus === "unregistered" && (
+            <>
+              <div style={{ padding: "10px 12px", borderRadius: 10, background: "#FEE2E2", border: "1px solid #FECACA", marginBottom: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#991B1B", marginBottom: 2 }}>⚠ SMS delivery may fail without carrier registration</div>
+                <div style={{ fontSize: 11, color: "#7F1D1D", lineHeight: 1.5 }}>US/Canadian carriers require businesses to register before sending marketing SMS.</div>
+              </div>
+              <button onClick={() => setShowRegForm(!showRegForm)} style={{ width: "100%", padding: "11px 0", borderRadius: 12, background: t.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: f, fontSize: 13, fontWeight: 700 }}>
+                Register now →
+              </button>
+            </>
+          )}
+          {a2pStatus === "pending" && <div style={{ fontSize: 13, color: t.sub }}>Registration submitted — carrier approval takes 1–3 business days.</div>}
+          {a2pStatus === "registered" && <div style={{ fontSize: 13, color: t.greenText, fontWeight: 600 }}>✓ Fully registered — SMS delivery optimized</div>}
+        </div>
+
+        {showRegForm && a2pStatus === "unregistered" && (
+          <div style={{ padding: "16px 18px", borderRadius: 16, background: t.accentSoft, border: `1px solid ${t.accent}20`, marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: t.accentText, marginBottom: 14 }}>Brand Registration</div>
+            {[{ label: "Business legal name", key: "legalName", ph: "George's Barbershop Inc." }, { label: "EIN / Business Number", key: "ein", ph: "12-3456789" }].map(field => (
+              <div key={field.key} style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: t.muted, marginBottom: 6 }}>{field.label.toUpperCase()}</div>
+                <input value={regForm[field.key]} onChange={e => setRegForm(fr => ({ ...fr, [field.key]: e.target.value }))} placeholder={field.ph} style={{ width: "100%", padding: "11px 14px", borderRadius: 10, background: t.card, border: `1px solid ${t.border}`, fontSize: 14, color: t.text, fontFamily: f, outline: "none", boxSizing: "border-box" }} />
+              </div>
+            ))}
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: t.muted, marginBottom: 6 }}>SAMPLE MESSAGE</div>
+              <textarea value={regForm.sampleMsg} onChange={e => setRegForm(fr => ({ ...fr, sampleMsg: e.target.value }))} style={{ width: "100%", padding: "11px 14px", borderRadius: 10, background: t.card, border: `1px solid ${t.border}`, fontSize: 12, color: t.sub, fontFamily: f, outline: "none", resize: "none", minHeight: 68, boxSizing: "border-box", lineHeight: 1.5 }} />
+            </div>
+            <button onClick={handleRegSubmit} disabled={regSubmitting || !regForm.legalName || !regForm.ein} style={{ width: "100%", padding: "12px 0", borderRadius: 12, background: regSubmitting || !regForm.legalName || !regForm.ein ? t.inputBg : t.accent, color: regSubmitting || !regForm.legalName || !regForm.ein ? t.muted : "#fff", border: "none", cursor: "pointer", fontFamily: f, fontSize: 14, fontWeight: 700 }}>
+              {regSubmitting ? "Submitting…" : "Submit registration"}
+            </button>
+          </div>
+        )}
+
+        {/* ── Interac deposits ── */}
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: t.muted, marginBottom: 10 }}>INTERAC E-TRANSFER DEPOSITS</div>
+        <div style={{ padding: "16px 18px", borderRadius: 16, background: t.card, border: `1px solid ${t.border}`, marginBottom: 20, boxShadow: t.shadow }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: interacEnabled ? 12 : 0 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: t.text }}>Accept Interac deposits</div>
+              <div style={{ fontSize: 12, color: t.sub, marginTop: 2 }}>Zero processing fee — clients e-Transfer directly</div>
+            </div>
+            <Toggle on={interacEnabled} onToggle={() => setInteracEnabled(!interacEnabled)} t={t} />
+          </div>
+          {interacEnabled && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: t.muted, marginBottom: 6 }}>DEPOSIT EMAIL</div>
+              <input value={interacEmail} onChange={e => setInteracEmail(e.target.value)} style={{ width: "100%", padding: "11px 14px", borderRadius: 10, background: t.inputBg, border: `1px solid ${t.border}`, fontSize: 14, color: t.text, fontFamily: f, outline: "none", boxSizing: "border-box" }} />
+            </div>
+          )}
+        </div>
+
+        {/* ── Stripe ── */}
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: t.muted, marginBottom: 10 }}>PAYMENTS</div>
+        <div style={{ padding: "14px 18px", borderRadius: 16, background: t.card, border: `1px solid ${t.border}`, boxShadow: t.shadow, display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: "#635BFF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: "#fff" }}>S</span>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: t.text }}>Stripe</div>
+            <div style={{ fontSize: 12, color: t.greenText, fontWeight: 600 }}>✓ Connected</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SettingsRow({ icon, title, sub, t, onClick }) {
   return (
     <div onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", cursor: onClick ? "pointer" : "default", borderBottom: `1px solid ${t.border}` }}>
@@ -3785,6 +4160,8 @@ function SettingsRow({ icon, title, sub, t, onClick }) {
 }
 
 function SettingsHubScreen({ t, onClose, onOpenBusiness, onOpenServices }) {
+  const [showSupport, setShowSupport] = useState(false);
+  const [showIntegrations, setShowIntegrations] = useState(false);
   const shopRows = [
     { title: "Business profile", sub: "Name, address, booking page brand", onClick: onOpenBusiness, icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.orangeText} strokeWidth="2" strokeLinecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
     { title: "Services & pricing", sub: "12 services · edit anytime", onClick: onOpenServices, icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.pinkText} strokeWidth="2" strokeLinecap="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg> },
@@ -3794,12 +4171,12 @@ function SettingsHubScreen({ t, onClose, onOpenBusiness, onOpenServices }) {
   const apRows = [
     { title: "Automation rules", sub: "6 flows running · all on", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.accentText} strokeWidth="2" strokeLinecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg> },
     { title: "AI Front Desk tone", sub: "Warm · 92% handle rate", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.greenText} strokeWidth="2" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> },
-    { title: "Integrations", sub: "Stripe · Instagram · SMS", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.sub} strokeWidth="2" strokeLinecap="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> },
+    { title: "Integrations", sub: "Stripe · Instagram · SMS", onClick: () => setShowIntegrations(true), icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.sub} strokeWidth="2" strokeLinecap="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> },
   ];
   const acctRows = [
     { title: "Billing", sub: "$49/mo · next on Jun 5", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.sub} strokeWidth="2" strokeLinecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg> },
     { title: "Notifications", sub: "Push, email, SMS", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.sub} strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg> },
-    { title: "Help & support", sub: "Reach George directly", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.sub} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> },
+    { title: "Help & support", sub: "< 2hr response · Edmonton team", onClick: () => setShowSupport(true), icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.sub} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> },
   ];
   const Section = ({ label, rows }) => (
     <>
@@ -3836,8 +4213,77 @@ function SettingsHubScreen({ t, onClose, onOpenBusiness, onOpenServices }) {
         <Section label="YOUR SHOP" rows={shopRows} />
         <Section label="AUTOPILOT" rows={apRows} />
         <Section label="ACCOUNT" rows={acctRows} />
+        {/* ── Your data is yours — trust section ── */}
+        <div style={{ borderRadius: 14, background: t.accentSoft, border: `1px solid ${t.accent}20`, padding: "14px 16px", marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.4, color: t.accentText, marginBottom: 8 }}>YOUR DATA IS YOURS</div>
+          <div style={{ fontSize: 13, color: t.text, lineHeight: 1.65, marginBottom: 10 }}>
+            No marketplace. No commission on your clients. FlatPurse Flow never sells your data or shows your clients competing salons.
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => {
+                const headers = ["Name","Phone","Email","LTV","Visits","Last Visit","Tags"];
+                const rows = CLIENTS_DB.map(c => [c.name, c.phone, c.email, c.ltv, c.visits, c.lastVisit, (c.tags||[]).join("|")]);
+                const csv = [headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,"'")}`).join(",")).join(String.fromCharCode(10));
+                const blob = new Blob([csv],{type:"text/csv"});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href=url; a.download="flatpurse-clients.csv"; a.click();
+                URL.revokeObjectURL(url);
+              }}
+              style={{ flex: 1, padding: "9px 0", borderRadius: 10, background: t.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: f, fontSize: 12, fontWeight: 700 }}>
+              ↓ Export all clients
+            </button>
+            <button style={{ flex: 1, padding: "9px 0", borderRadius: 10, background: t.card, color: t.text, border: `1px solid ${t.border}`, cursor: "pointer", fontFamily: f, fontSize: 12, fontWeight: 700 }}>
+              View privacy policy
+            </button>
+          </div>
+        </div>
+
         <button style={{ width: "100%", padding: "15px 0", borderRadius: 14, background: t.card, border: `1px solid ${t.border}`, fontSize: 15, fontWeight: 600, color: t.text, cursor: "pointer", fontFamily: f }}>Sign out</button>
       </div>
+
+      {/* ── Support overlay ── */}
+      {showSupport && (
+        <div style={{ position: "absolute", inset: 0, zIndex: 20, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "flex-end", borderRadius: 41, overflow: "hidden" }}>
+          <div style={{ width: "100%", background: t.bg, borderRadius: "22px 22px 0 0", padding: "20px 22px 36px", animation: "slideUp 0.28s cubic-bezier(0.32,0.72,0,1) both" }}>
+            <div style={{ width: 40, height: 4, borderRadius: 2, background: t.border, margin: "0 auto 18px" }} />
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+              <div style={{ width: 46, height: 46, borderRadius: 23, background: t.accent, color: "#fff", fontSize: 16, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>GO</div>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: t.text }}>George Ogunbande</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#22C55E" }} />
+                  <span style={{ fontSize: 12, color: t.greenText, fontWeight: 600 }}>Online now · Edmonton, AB</span>
+                </div>
+              </div>
+            </div>
+            {/* SLA promise */}
+            <div style={{ padding: "12px 16px", borderRadius: 12, background: t.greenBg, border: `1px solid ${t.green}20`, marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: t.greenText, marginBottom: 3 }}>Under 2-hour response · business hours</div>
+              <div style={{ fontSize: 12, color: t.sub }}>North American team. No offshore tickets. No chatbots. Real humans who built this product.</div>
+            </div>
+            {/* Contact options */}
+            {[
+              { icon: "💬", label: "WhatsApp George", sub: "+1 (780) XXX-XXXX", bg: "#25D366", color: "#fff" },
+              { icon: "✉️", label: "Email support", sub: "hello@flatpurse.com", bg: t.accentSoft, color: t.accentText },
+              { icon: "📅", label: "Book a 15-min call", sub: "calendly.com/flatpurse", bg: t.card, color: t.text },
+            ].map((c, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderRadius: 13, background: c.bg, border: `1px solid ${t.border}`, marginBottom: 8, cursor: "pointer" }}>
+                <span style={{ fontSize: 20 }}>{c.icon}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: c.color }}>{c.label}</div>
+                  <div style={{ fontSize: 12, color: t.sub }}>{c.sub}</div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={t.dim} strokeWidth="2.5" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
+              </div>
+            ))}
+            <button onClick={() => setShowSupport(false)} style={{ width: "100%", marginTop: 10, padding: "13px 0", background: "none", border: "none", cursor: "pointer", fontSize: 14, color: t.muted, fontFamily: f }}>Close</button>
+          </div>
+        </div>
+      )}
+      {showIntegrations && <IntegrationsScreen t={t} onClose={() => setShowIntegrations(false)} />}
     </div>
   );
 }
@@ -4164,21 +4610,17 @@ function EmailBriefScreen({ t, onClose }) {
                               if (winBackSent) return;
                               setWinBackSent("sending");
                               try {
-                                const res = await fetch("https://api.anthropic.com/v1/messages", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({
-                                    model: "claude-sonnet-4-20250514",
-                                    max_tokens: 200,
-                                    messages: [{
-                                      role: "user",
-                                      content: `Write a warm 2-sentence SMS win-back message for ${LISA_BRIEF.name}, who hasn't visited in ${LISA_BRIEF.daysSince} days. Her last service was ${LISA_BRIEF.lastService}. Her lifetime value is $${LISA_BRIEF.ltv}. Offer 15% off her next visit. Business name: Stride Cuts, Edmonton. Keep it personal, not salesy. No emojis.`,
-                                    }],
-                                  }),
-                                });
+                                const res = await api.post('/ai/winback/generate', {
+                                    clientId: "00000000-0000-0000-0000-000000000000",
+                                    clientName: LISA_BRIEF.name,
+                                    lastService: LISA_BRIEF.lastService,
+                                    daysSince: LISA_BRIEF.daysSince,
+                                    ltv: LISA_BRIEF.ltv,
+                                  });
                                 const data = await res.json();
-                                const msg = data.content?.[0]?.text || "We'd love to see you back, Lisa!";
+                                const msg = data.messageDraft || data.message_draft || "We'd love to see you back, Lisa!";
                                 console.log("✅ Email Brief win-back generated:", msg);
+                                await sendWinBackSMS(LISA_BRIEF.phone, msg);
                               } catch (err) {
                                 console.error("Email Brief win-back failed:", err);
                               }
@@ -4269,6 +4711,7 @@ function FlatpurseApp({
   const [mode, setMode] = useState(initialMode);
   const [tab, setTab] = useState(initialTab);
   const [isSetup, setIsSetup] = useState(initialSetup);
+  const isOnline = useOnlineStatus();
   const [dailyBrief, setDailyBrief] = useState(initialDailyBrief);
   const [showClientBooking, setShowClientBooking] = useState(initialOverlay === "clientBooking");
   const [showNewAppointment, setShowNewAppointment] = useState(initialOverlay === "newAppointment");
@@ -4304,9 +4747,31 @@ function FlatpurseApp({
           <div style={{ fontSize: 26, fontWeight: 800, color: t.text, letterSpacing: -0.5 }}>Clients</div>
           <div style={{ fontSize: 13, color: t.sub, marginTop: 3 }}>{CLIENTS_DB.length} total · tap to view profile</div>
         </div>
-        <button onClick={() => setShowNewAppointment(true)} style={{ width: 36, height: 36, borderRadius: 18, background: t.accent, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* Export CSV — your data, always */}
+          <button
+            onClick={() => {
+              const headers = ["Name","Phone","Email","LTV","Visits","Avg Spend","Last Visit","Tags"];
+              const rows = CLIENTS_DB.map(c => [c.name, c.phone, c.email, c.ltv, c.visits, c.avgSpend, c.lastVisit, (c.tags||[]).join("|")]);
+              const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,"'")}`).join(",")).join(String.fromCharCode(10));
+              const blob = new Blob([csv], { type: "text/csv" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url; a.download = "flatpurse-clients.csv"; a.click();
+              URL.revokeObjectURL(url);
+            }}
+            title="Export all clients — your data, always"
+            style={{ width: 34, height: 34, borderRadius: 10, background: t.card, border: `1px solid ${t.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={t.sub} strokeWidth="2.2" strokeLinecap="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </button>
+          <button onClick={() => setShowNewAppointment(true)} style={{ width: 36, height: 36, borderRadius: 18, background: t.accent, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
       </div>
     );
     if (tab === "bookings") return (
@@ -4455,6 +4920,12 @@ function FlatpurseApp({
       <div style={{ padding: "0 20px", flexShrink: 0 }}>{renderHeader()}</div>
 
       {/* Main scroll area */}
+      {!isOnline && (
+        <div style={{ background: "#FEF3C7", borderBottom: "1px solid #F59E0B", padding: "9px 20px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0, zIndex: 50 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2.5" strokeLinecap="round"><path d="M1 1l22 22M16.72 11.06A10.94 10.94 0 0 1 19 12.55M5 12.55a10.94 10.94 0 0 1 5.17-2.39M10.71 5.05A16 16 0 0 1 22.56 9M1.42 9a15.91 15.91 0 0 1 4.7-2.88M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg>
+          <span style={{ fontSize: 12, fontWeight: 700, color: "#D97706" }}>Offline mode — changes sync when connection restores</span>
+        </div>
+      )}
       <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch" }}>
         {renderContent()}
       </div>
@@ -5267,7 +5738,35 @@ function StepDailyBrief({ onNext, data, setData }) {
 // 9 — All done / launch
 function StepComplete({ data, onLaunch }) {
   const [visible, setVisible] = useState(false);
+  const [registering, setRegistering] = useState(false);
+  const [regError, setRegError] = useState(null);
   useEffect(() => { const t = setTimeout(() => setVisible(true), 100); return () => clearTimeout(t); }, []);
+
+  const handleLaunch = async () => {
+    // Attempt to register via real backend; fall back gracefully if it fails
+    if (data.email && data.password && !getToken()) {
+      setRegistering(true);
+      setRegError(null);
+      try {
+        const { register } = await import('./lib/auth.js');
+        await register(
+          data.bizName || "",
+          data.city || "",
+          data.bizType || "barbershop",
+          data.firstName || "",
+          data.lastName || "",
+          data.email,
+          data.password,
+        );
+      } catch (err) {
+        console.warn("Registration API error (continuing anyway):", err.message);
+        setRegError(err.message);
+      } finally {
+        setRegistering(false);
+      }
+    }
+    onLaunch();
+  };
 
   const recap = [
     { icon: "🏠", label: "Business", value: data.bizName || "Your shop" },
@@ -5316,7 +5815,10 @@ function StepComplete({ data, onLaunch }) {
       </div>
 
       <div style={{ opacity: visible?1:0, transition: "opacity 0.5s ease 0.5s" }}>
-        <Btn onClick={onLaunch}>Open FlatPurse Flow →</Btn>
+        <Btn onClick={handleLaunch} disabled={registering}>
+          {registering ? "Setting up…" : "Open FlatPurse Flow →"}
+        </Btn>
+        {regError && <div style={{ textAlign: "center", fontSize: 12, color: "#EF4444", marginTop: 6 }}>⚠ {regError} — continuing in demo mode</div>}
         <div style={{ textAlign: "center", fontSize: 12, color: "#94A3B8", marginTop: 10 }}>
           Questions? We're at hello@flatpurse.com
         </div>
@@ -6001,6 +6503,19 @@ function FlatpurseOnboarding({ onLaunchApp } = {}) {
 export default function FlatpurseRoot() {
   const [showApp, setShowApp] = useState(false);
   const [launching, setLaunching] = useState(false);
+
+  // On mount: check if a valid session already exists and skip onboarding
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    getMe().then(user => {
+      if (user) {
+        setShowApp(true);
+      } else {
+        clearToken();
+      }
+    });
+  }, []);
 
   const handleLaunch = () => {
     setLaunching(true);

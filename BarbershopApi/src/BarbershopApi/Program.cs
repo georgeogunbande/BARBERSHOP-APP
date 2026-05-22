@@ -111,6 +111,12 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<ITenantService, TenantService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<ISmsService, SmsService>();
+builder.Services.AddScoped<IAutoPilotService, AutoPilotService>();
+
+// ── HTTP client for outbound Twilio / Anthropic calls ────────────────────────
+builder.Services.AddHttpClient();
 
 // ── Controllers & Swagger ─────────────────────────────────────────────────────
 

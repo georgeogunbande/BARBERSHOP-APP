@@ -202,10 +202,36 @@ public class PaymentsController(AppDbContext db, ITenantService tenant, IConfigu
         var bizId = tenant.GetBusinessId()!.Value;
         var booking = await db.Bookings.FindAsync(req.BookingId);
         if (booking == null) return NotFound();
-        // TODO: charge via Stripe
-        booking.DepositPaid = true;
+
+        if (booking.DepositAmount <= 0)
+        {
+            booking.DepositPaid = true;
+            await db.SaveChangesAsync();
+            return Ok(new { message = "No deposit required.", amount = 0 });
+        }
+
+        StripeConfiguration.ApiKey = config["Stripe:SecretKey"];
+        var platformFeePercent = GetPlatformFeePercent();
+        var platformFee = Math.Round(booking.DepositAmount * platformFeePercent, 2);
+
+        var piService = new PaymentIntentService();
+        var pi = await piService.CreateAsync(new PaymentIntentCreateOptions
+        {
+            Amount = (long)(booking.DepositAmount * 100),
+            Currency = "cad",
+            PaymentMethod = req.StripePaymentMethodId,
+            Confirm = true,
+            OffSession = true,
+            ApplicationFeeAmount = (long)(platformFee * 100),
+            TransferData = new PaymentIntentTransferDataOptions { Destination = await GetStripeAccountAsync(bizId) }
+        });
+
+        booking.DepositPaid = pi.Status == "succeeded";
+        booking.DepositStatus = pi.Status == "succeeded"
+            ? Models.Enums.DepositStatus.Confirmed
+            : Models.Enums.DepositStatus.Failed;
         await db.SaveChangesAsync();
-        return Ok(new { message = "Deposit charged.", amount = booking.DepositAmount });
+        return Ok(new { message = "Deposit charged.", amount = booking.DepositAmount, status = pi.Status });
     }
 
     [HttpGet("deposit/{bookingId:guid}")]
@@ -294,8 +320,16 @@ public class PayoutsController(AppDbContext db, ITenantService tenant, IConfigur
         if (string.IsNullOrEmpty(biz?.StripeAccountId)) return Ok(new PendingBalanceDto(0, "CAD", 0));
 
         StripeConfiguration.ApiKey = config["Stripe:SecretKey"];
-        // TODO: fetch from Stripe Balance API
-        return Ok(new PendingBalanceDto(0, "CAD", 0));
+        var balanceSvc = new BalanceService();
+        var balance = await balanceSvc.GetAsync(new BalanceGetOptions(),
+            new RequestOptions { StripeAccount = biz.StripeAccountId });
+
+        var pending   = balance.Pending.FirstOrDefault(p => p.Currency == "cad");
+        var available = balance.Available.FirstOrDefault(p => p.Currency == "cad");
+        return Ok(new PendingBalanceDto(
+            (pending?.Amount ?? 0) / 100m,
+            "CAD",
+            (int)balance.Pending.Count));
     }
 
     [HttpGet("{id:guid}")]
@@ -311,10 +345,17 @@ public class PayoutsController(AppDbContext db, ITenantService tenant, IConfigur
     {
         var bizId = tenant.GetBusinessId()!.Value;
         StripeConfiguration.ApiKey = config["Stripe:SecretKey"];
-        // TODO: create/attach bank account via Stripe Connect
         var biz = await db.Businesses.FindAsync(bizId);
-        if (biz != null) { biz.StripeBankAccountId = req.StripeBankToken; await db.SaveChangesAsync(); }
-        return Ok(new { message = "Bank account connected." });
+        if (string.IsNullOrEmpty(biz?.StripeAccountId))
+            return BadRequest(new { error = "Stripe Connect account not set up for this business." });
+
+        var extAcctSvc = new ExternalAccountService();
+        var bankAccount = await extAcctSvc.CreateAsync(biz.StripeAccountId,
+            new ExternalAccountCreateOptions { ExternalAccount = req.StripeBankToken });
+
+        biz.StripeBankAccountId = bankAccount.Id;
+        await db.SaveChangesAsync();
+        return Ok(new { message = "Bank account connected.", bankAccountId = bankAccount.Id });
     }
 
     [HttpDelete("bank-account")]

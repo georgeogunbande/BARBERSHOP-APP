@@ -1,0 +1,215 @@
+@page "/payments/checkout"
+@using System.Text.Json
+@using FlatPurse.Models
+@using FlatPurse.Components.Shared
+@inject FlatPurse.Services.PaymentService PaymentService
+@inject FlatPurse.Services.ClientService ClientService
+@inject FlatPurse.Services.BookingService BookingService
+@inject FlatPurse.Services.AppStateService AppState
+@inject NavigationManager Nav
+
+<div class="page-header">
+    <div>
+        <button class="btn-back" @onclick="() => Nav.NavigateTo("/payments")">&#8592; Payments</button>
+        <h1 class="page-title">Checkout</h1>
+    </div>
+</div>
+
+<div class="checkout-layout">
+    <div class="checkout-main">
+        @if (!string.IsNullOrEmpty(_successMessage))
+        {
+            <div class="alert alert-success">@_successMessage</div>
+        }
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="alert alert-error">@_errorMessage</div>
+        }
+
+        <div class="form-section">
+            <h3>Client Lookup</h3>
+            <input class="form-control" type="search" placeholder="Search client..."
+                   @bind="_clientSearch" @bind:event="oninput" @onkeyup="OnClientSearch" />
+            @if (_clientResults.Any())
+            {
+                <ul class="search-dropdown">
+                    @foreach (var c in _clientResults)
+                    {
+                        <li @onclick="() => SelectClient(c)">@c.FirstName @c.LastName — @c.Phone</li>
+                    }
+                </ul>
+            }
+            @if (_selectedClient != null)
+            {
+                <div class="selected-badge">
+                    <strong>@_selectedClient.FirstName @_selectedClient.LastName</strong>
+                    <button @onclick="() => { _selectedClient = null; _paymentMethods.Clear(); }">&#x2715;</button>
+                </div>
+
+                @if (_paymentMethods.Any())
+                {
+                    <div class="payment-methods">
+                        <h4>Cards on file</h4>
+                        @foreach (var pm in _paymentMethods)
+                        {
+                            <div class="pm-card @(_selectedPmId == pm.Id.ToString() ? "selected" : "")"
+                                 @onclick="() => _selectedPmId = pm.Id.ToString()">
+                                <span>@pm.Brand.ToUpper() ****@pm.Last4</span>
+                                <span>@pm.ExpMonth/@pm.ExpYear</span>
+                                @if (pm.IsDefault) { <span class="badge">Default</span> }
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </div>
+
+        <div class="form-section">
+            <h3>Amount</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Amount</label>
+                    <input class="form-control" type="number" step="0.01" min="0" @bind="_amount" placeholder="0.00" />
+                </div>
+                <div class="form-group">
+                    <label>Tip</label>
+                    <input class="form-control" type="number" step="0.01" min="0" @bind="_tipAmount" placeholder="0.00" />
+                </div>
+            </div>
+            <div class="total-display">
+                Total: <strong>$@((_amount + _tipAmount).ToString("F2"))</strong>
+            </div>
+        </div>
+
+        <div class="payment-actions">
+            <button class="btn btn-primary" @onclick="ChargeCardAsync" disabled="@(_submitting || _selectedClient == null)">
+                Charge Card
+            </button>
+            <button class="btn btn-secondary" @onclick="RecordCashAsync" disabled="@(_submitting || _selectedClient == null)">
+                Cash
+            </button>
+            <button class="btn btn-outline" @onclick="GenerateLinkAsync" disabled="@(_submitting || _selectedClient == null)">
+                Payment Link
+            </button>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_paymentLinkUrl))
+        {
+            <div class="payment-link-display">
+                <p>Payment link generated:</p>
+                <a href="@_paymentLinkUrl" target="_blank">@_paymentLinkUrl</a>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _submitting;
+    private string? _successMessage;
+    private string? _errorMessage;
+    private string? _paymentLinkUrl;
+
+    private string _clientSearch = string.Empty;
+    private List<ClientDto> _clientResults = new();
+    private ClientDto? _selectedClient;
+    private List<PaymentMethodDto> _paymentMethods = new();
+    private string _selectedPmId = string.Empty;
+    private string _selectedBookingId = string.Empty;
+    private decimal _amount;
+    private decimal _tipAmount;
+
+    protected override void OnInitialized()
+    {
+        if (!AppState.IsAuthenticated)
+            Nav.NavigateTo("/login");
+    }
+
+    private async Task OnClientSearch(KeyboardEventArgs e)
+    {
+        if (_clientSearch.Length < 2) { _clientResults.Clear(); return; }
+        var results = await ClientService.SearchClientsAsync(_clientSearch);
+        _clientResults = results?.Take(5).ToList() ?? new();
+        StateHasChanged();
+    }
+
+    private async Task SelectClient(ClientDto client)
+    {
+        _selectedClient = client;
+        _clientSearch = string.Empty;
+        _clientResults.Clear();
+        var methods = await PaymentService.GetPaymentMethodsAsync(client.Id);
+        _paymentMethods = methods?.ToList() ?? new();
+        StateHasChanged();
+    }
+
+    private async Task ChargeCardAsync()
+    {
+        if (_selectedClient == null || !Guid.TryParse(_selectedPmId, out _)) return;
+        _submitting = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        var req = new ChargeRequest(
+            Guid.TryParse(_selectedBookingId, out var bid) ? bid : Guid.Empty,
+            _selectedClient.Id,
+            _selectedPmId,
+            _amount,
+            _tipAmount);
+
+        var payment = await PaymentService.ChargeCardAsync(req);
+        if (payment != null && payment.Status == PaymentStatus.Succeeded)
+            _successMessage = $"Payment of ${_amount + _tipAmount:F2} successful!";
+        else
+            _errorMessage = "Charge failed. Please try again.";
+
+        _submitting = false;
+        StateHasChanged();
+    }
+
+    private async Task RecordCashAsync()
+    {
+        if (_selectedClient == null) return;
+        _submitting = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        var req = new RecordCashPaymentRequest(
+            Guid.TryParse(_selectedBookingId, out var bid) ? bid : Guid.Empty,
+            _amount,
+            _tipAmount);
+
+        var payment = await PaymentService.RecordCashAsync(req);
+        if (payment != null)
+            _successMessage = $"Cash payment of ${_amount + _tipAmount:F2} recorded.";
+        else
+            _errorMessage = "Failed to record cash payment.";
+
+        _submitting = false;
+        StateHasChanged();
+    }
+
+    private async Task GenerateLinkAsync()
+    {
+        if (_selectedClient == null) return;
+        _submitting = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        var req = new GeneratePaymentLinkRequest(
+            Guid.TryParse(_selectedBookingId, out var bid) ? bid : Guid.Empty,
+            _amount,
+            null);
+
+        var link = await PaymentService.GeneratePaymentLinkAsync(req);
+        if (link != null)
+        {
+            _paymentLinkUrl = link.Url;
+            _successMessage = "Payment link generated!";
+        }
+        else
+            _errorMessage = "Failed to generate payment link.";
+
+        _submitting = false;
+        StateHasChanged();
+    }
+}

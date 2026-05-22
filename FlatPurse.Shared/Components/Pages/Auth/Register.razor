@@ -1,0 +1,114 @@
+@page "/register"
+@layout FlatPurse.Components.Layout.AuthLayout
+@using FlatPurse.Models
+@inject FlatPurse.Services.AuthService AuthService
+@inject FlatPurse.Services.AppStateService AppState
+@inject NavigationManager Nav
+
+<div class="auth-form-wrapper">
+    <h2>Create your account</h2>
+    <p class="form-subtitle">Set up your barbershop in minutes.</p>
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="alert alert-error">@_errorMessage</div>
+    }
+
+    <EditForm Model="@_model" OnValidSubmit="HandleRegister">
+        <DataAnnotationsValidator />
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>First Name</label>
+                <InputText class="form-control" @bind-Value="_model.FirstName" placeholder="Alex" />
+            </div>
+            <div class="form-group">
+                <label>Last Name</label>
+                <InputText class="form-control" @bind-Value="_model.LastName" placeholder="Smith" />
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Email</label>
+            <InputText class="form-control" @bind-Value="_model.Email" type="email" placeholder="alex@mybarbershop.com" />
+        </div>
+
+        <div class="form-group">
+            <label>Password</label>
+            <InputText class="form-control" @bind-Value="_model.Password" type="password" placeholder="Min. 8 characters" />
+        </div>
+
+        <div class="form-group">
+            <label>Business Name</label>
+            <InputText class="form-control" @bind-Value="_model.BusinessName" placeholder="Classic Cuts Barbershop" />
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>City</label>
+                <InputText class="form-control" @bind-Value="_model.City" placeholder="Toronto" />
+            </div>
+            <div class="form-group">
+                <label>Business Type</label>
+                <InputSelect class="form-control" @bind-Value="_model.BusinessType">
+                    <option value="">Select type</option>
+                    <option value="barbershop">Barbershop</option>
+                    <option value="salon">Salon</option>
+                    <option value="spa">Spa</option>
+                    <option value="booth_renter">Booth Renter</option>
+                </InputSelect>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full" disabled="@_loading">
+            @(_loading ? "Creating account..." : "Get started")
+        </button>
+    </EditForm>
+
+    <p class="auth-footer-link">
+        Already have an account? <a href="/login">Sign in</a>
+    </p>
+</div>
+
+@code {
+    private readonly RegisterModel _model = new();
+    private string? _errorMessage;
+    private bool _loading;
+
+    protected override void OnInitialized()
+    {
+        if (AppState.IsAuthenticated)
+            Nav.NavigateTo("/dashboard");
+    }
+
+    private async Task HandleRegister()
+    {
+        _loading = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        var req = new RegisterRequest(
+            _model.FirstName, _model.LastName, _model.Email, _model.Password,
+            _model.BusinessName, _model.City, _model.BusinessType);
+
+        var success = await AuthService.RegisterAsync(req);
+        if (success)
+            Nav.NavigateTo("/dashboard");
+        else
+            _errorMessage = "Registration failed. Please check your details and try again.";
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private class RegisterModel
+    {
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string BusinessName { get; set; } = string.Empty;
+        public string? City { get; set; }
+        public string? BusinessType { get; set; }
+    }
+}

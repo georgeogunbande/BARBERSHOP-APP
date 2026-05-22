@@ -3,6 +3,9 @@ BarbershopApi/src/BarbershopApi/appsettings.Development.json
 BarbershopApi/src/BarbershopApi/appsettings.Production.json
 BarbershopApi/src/BarbershopApi/appsettings.Local.json
 
+# Claude Code session data
+.claude/
+
 # .NET build output
 BarbershopApi/**/bin/
 BarbershopApi/**/obj/

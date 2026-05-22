@@ -25,7 +25,9 @@ public class MessagingLog
     public string Body { get; set; } = string.Empty;
     public string? ExternalMessageId { get; set; }
     public string Status { get; set; } = "sent";
+    public string DeliveryStatus { get; set; } = "queued";
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
 
 public class BriefSettings

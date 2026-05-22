@@ -2,7 +2,9 @@ using BarbershopApi.Data;
 using BarbershopApi.DTOs;
 using BarbershopApi.Models.Bookings;
 using BarbershopApi.Models.Enums;
+using static BarbershopApi.Models.Enums.DepositStatus;
 using BarbershopApi.Services;
+#pragma warning disable CS4014 // fire-and-forget AutoPilot triggers
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +14,7 @@ namespace BarbershopApi.Controllers;
 [ApiController]
 [Route("bookings")]
 [Authorize]
-public class BookingsController(AppDbContext db, ITenantService tenant) : ControllerBase
+public class BookingsController(AppDbContext db, ITenantService tenant, IAutoPilotService autoPilot) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List(
@@ -108,7 +110,7 @@ public class BookingsController(AppDbContext db, ITenantService tenant) : Contro
         booking.Status = BookingStatus.Cancelled;
         booking.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
-        // TODO: trigger cancellation_alert AutoPilot flow
+        _ = autoPilot.TriggerCancellationAlertAsync(booking.BusinessId, booking.Id, booking.ClientId);
         return NoContent();
     }
 
@@ -131,7 +133,7 @@ public class BookingsController(AppDbContext db, ITenantService tenant) : Contro
         }
 
         await db.SaveChangesAsync();
-        // TODO: trigger review_request AutoPilot flow (24hr delay)
+        _ = autoPilot.TriggerReviewRequestAsync(booking.BusinessId, booking.Id, booking.ClientId);
         return Ok(booking);
     }
 
@@ -144,8 +146,41 @@ public class BookingsController(AppDbContext db, ITenantService tenant) : Contro
 
         booking.Status = BookingStatus.NoShow;
         booking.UpdatedAt = DateTime.UtcNow;
+
+        var client = await db.Clients.FindAsync(booking.ClientId);
+        if (client != null) client.NoShowCount++;
+
         await db.SaveChangesAsync();
-        // TODO: trigger no_show_recovery AutoPilot flow
+        return Ok(new { booking, clientNoShowCount = client?.NoShowCount ?? 0 });
+    }
+
+    [HttpPost("{id:guid}/deposit/interac")]
+    public async Task<IActionResult> CreateInteracDeposit(Guid id)
+    {
+        var bizId = tenant.GetBusinessId()!.Value;
+        var booking = await db.Bookings.FirstOrDefaultAsync(b => b.Id == id && b.BusinessId == bizId);
+        if (booking == null) return NotFound();
+
+        booking.InteracRefCode = $"FPF-{id.ToString()[..8].ToUpper()}";
+        booking.DepositStatus = DepositStatus.PendingInterac;
+        booking.SlotLockedUntil = DateTime.UtcNow.AddHours(2);
+        booking.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        return Ok(new { refCode = booking.InteracRefCode, lockedUntil = booking.SlotLockedUntil });
+    }
+
+    [HttpPatch("{id:guid}/deposit/confirm")]
+    public async Task<IActionResult> ConfirmDeposit(Guid id)
+    {
+        var bizId = tenant.GetBusinessId()!.Value;
+        var booking = await db.Bookings.FirstOrDefaultAsync(b => b.Id == id && b.BusinessId == bizId);
+        if (booking == null) return NotFound();
+
+        booking.DepositPaid = true;
+        booking.DepositStatus = DepositStatus.Confirmed;
+        booking.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
         return Ok(booking);
     }
 

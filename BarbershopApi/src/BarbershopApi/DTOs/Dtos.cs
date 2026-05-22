@@ -59,7 +59,7 @@ public record CreateClientRequest(string FirstName, string LastName, string? Ema
 public record UpdateClientRequest(string? FirstName, string? LastName, string? Email, string? Phone, DateTime? DateOfBirth, List<ClientTag>? Tags, int? RebookIntervalDays);
 public record AddNoteRequest(string Content, bool IsPinned = false);
 public record UpdateNoteRequest(string? Content, bool? IsPinned);
-public record SendMessageRequest(string Body, MessageChannel Channel);
+public record SendMessageRequest(string Body, MessageChannel Channel, string? Subject = null);
 
 public record ClientDto(Guid Id, string FirstName, string LastName, string? Email, string? Phone, string? AvatarUrl, List<ClientTag> Tags, ChurnRisk ChurnRisk, decimal LifetimeValue, int VisitCount, DateTime? LastVisitAt, DateTime CreatedAt);
 public record ClientNoteDto(Guid Id, string Content, bool IsPinned, string AuthorUserId, DateTime CreatedAt, DateTime UpdatedAt);
@@ -119,7 +119,7 @@ public record AutoPilotStatsDto(int SlotsFilled, int MessagesSent, int WinbacksT
 
 public record UpdateAiPromptRequest(string Prompt);
 public record ManualReplyRequest(string Message);
-public record GenerateWinbackRequest(Guid ClientId);
+public record GenerateWinbackRequest(Guid ClientId, string? ClientName = null, string? LastService = null, int? DaysSince = null, decimal? Ltv = null);
 public record SendWinbackRequest(Guid ClientId, string Message);
 
 public record AiConversationDto(Guid Id, Guid? ClientId, string? ClientName, MessageChannel Channel, AiConversationStatus Status, int MessageCount, DateTime LastMessageAt);
@@ -137,6 +137,8 @@ public record NotificationDto(Guid Id, NotificationType Type, string Title, stri
 // ── Messaging ─────────────────────────────────────────────────────────────────
 
 public record SendSmsRequest(Guid ClientId, string Message);
+public record SendSmsDirectRequest(string To, string Body);
+public record Register10DlcRequest(string LegalName, string Ein, string? Phone, string? Street, string? City, string? State, string? PostalCode);
 public record SendEmailRequest(Guid ClientId, string Subject, string Body);
 public record BlastRequest(string Message, List<ClientTag>? Tags, ChurnRisk? ChurnRisk);
 public record CreateTemplateRequest(string Name, string Subject, string Body, MessageChannel Channel);
@@ -149,6 +151,7 @@ public record BriefSettingsDto(TimeOnly DeliveryTime, List<MessageChannel> Chann
 // ── Channels ──────────────────────────────────────────────────────────────────
 
 public record ConnectChannelRequest(string Code, string? RedirectUri);
+public record VerifyEmailDomainRequest(string Domain);
 public record ChannelDto(Guid Id, ChannelType Type, ChannelStatus Status, string? ExternalAccountName, DateTime? ConnectedAt);
 
 // ── Operations ────────────────────────────────────────────────────────────────

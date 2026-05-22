@@ -1,0 +1,146 @@
+@page "/autopilot"
+@using System.Text.Json
+@using FlatPurse.Models
+@using FlatPurse.Components.Shared
+@inject FlatPurse.Services.AutoPilotService AutoPilotService
+@inject FlatPurse.Services.AppStateService AppState
+@inject NavigationManager Nav
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">AutoPilot</h1>
+        <p class="page-subtitle">Automated flows running for your business</p>
+    </div>
+    @if (_status != null)
+    {
+        <div class="global-toggle">
+            <span>@(_status.GloballyEnabled ? "Active" : "Paused")</span>
+            <button class="toggle-btn @(_status.GloballyEnabled ? "on" : "off")"
+                    @onclick="ToggleGlobalAsync">
+                @(_status.GloballyEnabled ? "ON" : "OFF")
+            </button>
+        </div>
+    }
+</div>
+
+@if (_loading)
+{
+    <LoadingSpinner />
+}
+else
+{
+    @if (_stats != null)
+    {
+        <div class="stats-grid">
+            <StatCard Label="Slots Filled" Value="@_stats.SlotsFilled.ToString()" Trend="" />
+            <StatCard Label="Winbacks" Value="@_stats.WinbacksTriggered.ToString()" Trend="" />
+            <StatCard Label="Revenue Recovered" Value="@($"${_stats.TotalRevenueRecovered:F2}")" Trend="" />
+            <StatCard Label="Messages Sent" Value="@_stats.MessagesSent.ToString()" Trend="" />
+        </div>
+    }
+
+    <div class="section">
+        <h2>Flows</h2>
+        <div class="flows-list">
+            @foreach (var flow in _flows)
+            {
+                <div class="flow-card @(flow.IsEnabled ? "enabled" : "disabled")">
+                    <div class="flow-header">
+                        <div>
+                            <h3 class="flow-name">@flow.Name</h3>
+                            <p class="flow-desc">@flow.Description</p>
+                        </div>
+                        <button class="toggle-btn @(flow.IsEnabled ? "on" : "off")"
+                                @onclick="() => ToggleFlowAsync(flow)">
+                            @(flow.IsEnabled ? "ON" : "OFF")
+                        </button>
+                    </div>
+                    <div class="flow-meta">
+                        <span class="flow-trigger">Trigger: @flow.Trigger</span>
+                        <span class="flow-action">Action: @flow.Action</span>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Recent Events</h2>
+        @if (_events.Count == 0)
+        {
+            <EmptyState Message="No AutoPilot events yet." />
+        }
+        else
+        {
+            <div class="events-list">
+                @foreach (var ev in _events)
+                {
+                    <div class="event-row @(ev.WasSuccessful ? "success" : "failed")">
+                        <span class="event-flow">@ev.FlowName</span>
+                        <span class="event-desc">@ev.Description</span>
+                        @if (ev.RevenueRecovered.HasValue && ev.RevenueRecovered > 0)
+                        {
+                            <span class="event-revenue">+$@ev.RevenueRecovered.Value.ToString("F2")</span>
+                        }
+                        <span class="event-time">@ev.CreatedAt.ToString("MMM d h:mm tt")</span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private AutoPilotStatusDto? _status;
+    private AutoPilotStatsDto? _stats;
+    private List<FlowStatusDto> _flows = new();
+    private List<AutoPilotEventDto> _events = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AppState.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        _status = await AutoPilotService.GetStatusAsync();
+        _flows = _status?.Flows ?? new();
+
+        _stats = await AutoPilotService.GetStatsAsync();
+
+        var eventsResult = await AutoPilotService.GetEventsAsync(limit: 20);
+        if (eventsResult != null)
+        {
+            var json = JsonSerializer.Serialize(eventsResult);
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("items", out var items))
+                _events = JsonSerializer.Deserialize<List<AutoPilotEventDto>>(items.GetRawText(),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+        }
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task ToggleGlobalAsync()
+    {
+        if (_status == null) return;
+        await AutoPilotService.UpdateGlobalAsync(!_status.GloballyEnabled);
+        await LoadDataAsync();
+    }
+
+    private async Task ToggleFlowAsync(FlowStatusDto flow)
+    {
+        await AutoPilotService.UpdateFlowAsync(flow.FlowId.ToString(), new UpdateFlowRequest(!flow.IsEnabled, null));
+        await LoadDataAsync();
+    }
+}

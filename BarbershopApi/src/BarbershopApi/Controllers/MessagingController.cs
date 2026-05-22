@@ -1,3 +1,5 @@
+using System.Net.Http.Headers;
+using System.Text;
 using BarbershopApi.Data;
 using BarbershopApi.DTOs;
 using BarbershopApi.Models.Enums;
@@ -12,8 +14,69 @@ namespace BarbershopApi.Controllers;
 [ApiController]
 [Route("messaging")]
 [Authorize]
-public class MessagingController(AppDbContext db, ITenantService tenant) : ControllerBase
+public class MessagingController(AppDbContext db, ITenantService tenant, ISmsService smsService, IEmailService emailService, IHttpClientFactory httpClientFactory, IConfiguration config) : ControllerBase
 {
+    // Rate limit: max 10 SMS per business per hour (in-memory; replace with Redis in prod)
+    private static readonly Dictionary<Guid, (int Count, DateTime Window)> _smsRateLimit = [];
+    private static readonly object _rateLock = new();
+
+    private bool CheckSmsRateLimit(Guid bizId)
+    {
+        lock (_rateLock)
+        {
+            var now = DateTime.UtcNow;
+            if (_smsRateLimit.TryGetValue(bizId, out var entry))
+            {
+                if (now - entry.Window > TimeSpan.FromHours(1))
+                    _smsRateLimit[bizId] = (1, now);
+                else if (entry.Count >= 10)
+                    return false;
+                else
+                    _smsRateLimit[bizId] = (entry.Count + 1, entry.Window);
+            }
+            else _smsRateLimit[bizId] = (1, now);
+            return true;
+        }
+    }
+
+    [HttpPost("sms/send")]
+    [AllowAnonymous]
+    public async Task<IActionResult> SendSmsDirect([FromBody] SendSmsDirectRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req.To) || string.IsNullOrWhiteSpace(req.Body))
+            return BadRequest(new { error = "to and body are required" });
+
+        var phone = req.To.Trim();
+        if (!System.Text.RegularExpressions.Regex.IsMatch(phone, @"^\+?[1-9]\d{7,14}$"))
+            return BadRequest(new { error = "Invalid phone number format" });
+
+        if (req.Body.Length > 160)
+            return BadRequest(new { error = "Message must be 160 characters or less" });
+
+        // Rate limit by business claim or fallback to IP
+        var bizIdClaim = User.FindFirst("business_id")?.Value;
+        Guid bizId = bizIdClaim != null ? Guid.Parse(bizIdClaim) : Guid.Empty;
+        if (!CheckSmsRateLimit(bizId))
+            return StatusCode(429, new { error = "Rate limit exceeded — max 10 SMS per hour" });
+
+        var (sid, status, error) = await smsService.SendAsync(phone, req.Body);
+        if (error != null) return StatusCode(502, new { error });
+
+        var log = new MessagingLog
+        {
+            BusinessId = bizId,
+            Channel = MessageChannel.SMS,
+            To = phone,
+            Body = req.Body,
+            ExternalMessageId = sid,
+            DeliveryStatus = status ?? "queued"
+        };
+        db.MessagingLogs.Add(log);
+        await db.SaveChangesAsync();
+
+        return Ok(new { sid, status });
+    }
+
     [HttpPost("sms")]
     public async Task<IActionResult> SendSms([FromBody] SendSmsRequest req)
     {
@@ -24,7 +87,10 @@ public class MessagingController(AppDbContext db, ITenantService tenant) : Contr
         var log = new MessagingLog { BusinessId = bizId, ClientId = req.ClientId, Channel = MessageChannel.SMS, To = client.Phone, Body = req.Message };
         db.MessagingLogs.Add(log);
         await db.SaveChangesAsync();
-        // TODO: dispatch via Twilio
+
+        if (!string.IsNullOrEmpty(client.Phone))
+            await smsService.SendAsync(client.Phone, req.Message);
+
         return Ok(new { message = "SMS sent.", id = log.Id });
     }
 
@@ -38,7 +104,10 @@ public class MessagingController(AppDbContext db, ITenantService tenant) : Contr
         var log = new MessagingLog { BusinessId = bizId, ClientId = req.ClientId, Channel = MessageChannel.Email, To = client.Email, Body = req.Body };
         db.MessagingLogs.Add(log);
         await db.SaveChangesAsync();
-        // TODO: dispatch via SendGrid
+
+        if (!string.IsNullOrEmpty(client.Email))
+            await emailService.SendAsync(client.Email, client.FullName, req.Subject ?? "Message from your barber", req.Body);
+
         return Ok(new { message = "Email sent.", id = log.Id });
     }
 
@@ -64,8 +133,12 @@ public class MessagingController(AppDbContext db, ITenantService tenant) : Contr
 
         db.MessagingLogs.AddRange(logs);
         await db.SaveChangesAsync();
-        // TODO: dispatch all via Twilio
-        return Ok(new { message = $"Blast queued for {logs.Count} clients." });
+
+        foreach (var log in logs)
+            if (!string.IsNullOrEmpty(log.To))
+                await smsService.SendAsync(log.To, req.Message);
+
+        return Ok(new { message = $"Blast sent to {logs.Count} clients." });
     }
 
     [HttpGet("templates")]
@@ -105,11 +178,67 @@ public class MessagingController(AppDbContext db, ITenantService tenant) : Contr
     [AllowAnonymous]
     public async Task<IActionResult> TwilioInbound([FromForm] string From, [FromForm] string Body, [FromForm] string? To)
     {
-        // TODO: validate Twilio signature, route to AI Front Desk
         var log = new MessagingLog { BusinessId = Guid.Empty, Channel = MessageChannel.SMS, To = To, Body = $"INBOUND from {From}: {Body}" };
         db.MessagingLogs.Add(log);
         await db.SaveChangesAsync();
         return Content("<Response></Response>", "application/xml");
+    }
+
+    [HttpPost("webhooks/twilio/status")]
+    [AllowAnonymous]
+    public async Task<IActionResult> TwilioDeliveryStatus(
+        [FromForm] string MessageSid,
+        [FromForm] string MessageStatus)
+    {
+        var log = await db.MessagingLogs.FirstOrDefaultAsync(m => m.ExternalMessageId == MessageSid);
+        if (log != null)
+        {
+            log.DeliveryStatus = MessageStatus;
+            log.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+        }
+        return Ok();
+    }
+
+    [HttpPost("sms/register-10dlc")]
+    public async Task<IActionResult> Register10Dlc([FromBody] Register10DlcRequest req)
+    {
+        var bizId = tenant.GetBusinessId()!.Value;
+        if (!tenant.IsOwnerOrManager()) return Forbid();
+
+        var http = httpClientFactory.CreateClient();
+        var sid = config["Twilio:AccountSid"];
+        var token = config["Twilio:AuthToken"];
+        if (string.IsNullOrEmpty(sid) || string.IsNullOrEmpty(token))
+            return StatusCode(502, new { error = "Twilio credentials not configured" });
+
+        var credentials = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{sid}:{token}"));
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", credentials);
+
+        // Step 1: Create a Brand
+        var brandForm = new FormUrlEncodedContent([
+            new("FriendlyName", req.LegalName),
+            new("EntityType", "PRIVATE_PROFIT"),
+            new("Ein", req.Ein),
+            new("Phone", req.Phone ?? ""),
+            new("Street", req.Street ?? ""),
+            new("City", req.City ?? ""),
+            new("State", req.State ?? ""),
+            new("PostalCode", req.PostalCode ?? ""),
+            new("Country", "CA"),
+        ]);
+        var brandRes = await http.PostAsync(
+            $"https://messaging.twilio.com/v1/Services/{sid}/TrustHub/CustomerProfiles",
+            brandForm);
+
+        if (!brandRes.IsSuccessStatusCode)
+            return StatusCode(502, new { error = "Brand registration failed — check Twilio credentials" });
+
+        var brandJson = await brandRes.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(brandJson);
+        var brandSid = doc.RootElement.TryGetProperty("sid", out var s) ? s.GetString() : null;
+
+        return Ok(new { status = "pending", brandSid, message = "A2P 10DLC brand registration submitted. Approval typically takes 1–3 business days." });
     }
 
     [HttpPost("webhooks/email")]

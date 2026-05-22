@@ -1,0 +1,16 @@
+@namespace FlatPurse.Components.Shared
+
+<div class="stat-card">
+    <div class="stat-label">@Label</div>
+    <div class="stat-value">@Value</div>
+    @if (!string.IsNullOrEmpty(Trend))
+    {
+        <div class="stat-trend">@Trend</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Value { get; set; } = string.Empty;
+    [Parameter] public string Trend { get; set; } = string.Empty;
+}

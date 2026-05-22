@@ -1,0 +1,15 @@
+@namespace FlatPurse.Components.Shared
+
+<div class="empty-state">
+    <div class="empty-icon">&#x1F4C2;</div>
+    <p class="empty-message">@Message</p>
+    @if (ChildContent != null)
+    {
+        @ChildContent
+    }
+</div>
+
+@code {
+    [Parameter] public string Message { get; set; } = "Nothing here yet.";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}
