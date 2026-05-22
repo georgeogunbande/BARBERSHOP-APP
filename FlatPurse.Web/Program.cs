@@ -23,7 +23,7 @@ if (!app.Environment.IsDevelopment())
 app.UseStaticFiles();
 app.UseAntiforgery();
 
-app.MapRazorComponents<FlatPurse.Components.App>()
+app.MapRazorComponents<FlatPurse.Web.Components.App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();

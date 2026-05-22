@@ -1,0 +1,78 @@
+@page "/payments/success"
+@inject NavigationManager Nav
+
+<div class="success-page">
+    <div class="success-card">
+        <div class="success-icon success-icon-green">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+        </div>
+        <h1 class="success-title">Payment collected! 💸</h1>
+        <p class="success-sub">The payment has been processed and your payout is on its way.</p>
+
+        @if (_amount > 0)
+        {
+            <div class="payment-success-amount">
+                <div class="payment-success-label">Amount collected</div>
+                <div class="payment-success-value">$@_amount.ToString("F2")</div>
+                @if (_tip > 0)
+                {
+                    <div class="payment-success-tip">includes $@_tip.ToString("F2") tip 🙌</div>
+                }
+            </div>
+        }
+
+        <div class="success-details">
+            <div class="success-detail-row success-detail-green">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>
+                </svg>
+                <span>Receipt sent to client</span>
+            </div>
+            <div class="success-detail-row success-detail-green">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                </svg>
+                <span>AutoPilot review request will be sent in 2 hours</span>
+            </div>
+            <div class="success-detail-row success-detail-green">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                </svg>
+                <span>Net payout in 1–2 business days</span>
+            </div>
+        </div>
+
+        <div class="success-actions">
+            <a href="/payments/checkout" class="btn btn-primary">New checkout</a>
+            <a href="/" class="btn btn-secondary">Go to Dashboard</a>
+            <a href="/payments" class="btn btn-ghost">View transactions</a>
+        </div>
+    </div>
+</div>
+
+@code {
+    private decimal _amount;
+    private decimal _tip;
+
+    protected override void OnInitialized()
+    {
+        var uri = new Uri(Nav.Uri);
+        var query = uri.Query.TrimStart('?');
+        foreach (var part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var kv = part.Split('=', 2);
+            if (kv.Length == 2)
+            {
+                var key = Uri.UnescapeDataString(kv[0]);
+                var val = Uri.UnescapeDataString(kv[1]);
+                if (key == "amount" && decimal.TryParse(val, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var amount))
+                    _amount = amount;
+                if (key == "tip" && decimal.TryParse(val, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var tip))
+                    _tip = tip;
+            }
+        }
+    }
+}

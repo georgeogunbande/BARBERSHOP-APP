@@ -1,0 +1,121 @@
+@page "/barber"
+@using FlatPurse.Models
+@inject FlatPurse.Services.AppStateService AppState
+@inject NavigationManager Nav
+@implements IDisposable
+
+<div class="barber-mode">
+    <div class="barber-header">
+        <div class="barber-logo">
+            <div class="barber-logo-mark">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                </svg>
+            </div>
+            <span>FlatPurse Flow</span>
+        </div>
+        <div class="barber-header-right">
+            <div class="barber-ap-badge">
+                <div class="pulse-dot"></div>
+                AutoPilot ON
+            </div>
+            <a href="/" class="barber-exit-btn">Exit Barber Mode</a>
+        </div>
+    </div>
+
+    <div class="barber-clock-section">
+        <div class="barber-date">@_now.ToString("dddd, MMMM d")</div>
+        <div class="barber-time">@_now.ToString("H:mm")</div>
+        <div class="barber-time-ampm">@_now.ToString("tt")</div>
+    </div>
+
+    <div class="barber-body">
+        <div class="barber-next">
+            @if (_nextUp != null)
+            {
+                <div class="barber-next-label">Next up</div>
+                <div class="barber-next-card">
+                    <div class="barber-next-time">@_nextUp.Time</div>
+                    <div class="barber-next-avatar" style="background:@_nextUp.Color">@_nextUp.Initials</div>
+                    <div class="barber-next-info">
+                        <div class="barber-next-name">@_nextUp.Name</div>
+                        <div class="barber-next-service">@_nextUp.Service</div>
+                    </div>
+                    <div class="barber-next-price">$@_nextUp.Price</div>
+                </div>
+            }
+            else
+            {
+                <div class="barber-next-label">No more appointments today</div>
+            }
+        </div>
+
+        <div class="barber-schedule">
+            <div class="barber-schedule-title">Today's Lineup</div>
+            <div class="barber-schedule-list">
+                @foreach (var appt in _schedule)
+                {
+                    <div class="barber-appt @(appt.Status == "done" ? "barber-appt-done" : appt.Status == "next" ? "barber-appt-next" : "")">
+                        <span class="barber-appt-time">@appt.Time</span>
+                        <div class="barber-appt-avatar" style="background:@appt.Color">@appt.Initials</div>
+                        <div class="barber-appt-info">
+                            <div class="barber-appt-name">@appt.Name</div>
+                            <div class="barber-appt-service">@appt.Service</div>
+                        </div>
+                        <span class="barber-appt-price">$@appt.Price</span>
+                        <span class="barber-appt-status status-@appt.Status">@appt.StatusLabel</span>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="barber-actions">
+            <a href="/payments/checkout" class="barber-action-btn barber-checkout">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>
+                </svg>
+                Checkout
+            </a>
+            <a href="/bookings/new" class="barber-action-btn barber-new">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                New Booking
+            </a>
+        </div>
+    </div>
+</div>
+
+@code {
+    private DateTime _now = DateTime.Now;
+    private System.Timers.Timer? _timer;
+
+    private record Appointment(string Time, string Initials, string Color, string Name, string Service, int Price, string Status, string StatusLabel);
+
+    private readonly List<Appointment> _schedule = new()
+    {
+        new("9:00",  "MB", "#534AB7", "Marcus Brown",   "Fade + Design",  75,  "done",  "Done"),
+        new("10:00", "TJ", "#DB2777", "Tyler James",    "Full Cut",       55,  "done",  "Done"),
+        new("11:00", "DK", "#16A34A", "Daniel King",    "Cut + Beard",    65,  "done",  "Done"),
+        new("12:00", "AW", "#9333EA", "Alex White",     "Fade",           55,  "done",  "Done"),
+        new("13:00", "LP", "#0284C7", "Lisa Park",      "Colour + Cut",   130, "next",  "Next"),
+        new("14:00", "RN", "#534AB7", "Ryan Nguyen",    "Fade + Design",  75,  "upcoming","Upcoming"),
+        new("15:30", "SO", "#DB2777", "Sam O'Brien",    "Full Cut",       55,  "upcoming","Upcoming"),
+        new("16:00", "CH", "#16A34A", "Chris Hart",     "Beard Trim",     35,  "upcoming","Upcoming"),
+    };
+
+    private Appointment? _nextUp => _schedule.FirstOrDefault(a => a.Status == "next");
+
+    protected override void OnInitialized()
+    {
+        _timer = new System.Timers.Timer(1000);
+        _timer.Elapsed += (_, _) =>
+        {
+            _now = DateTime.Now;
+            InvokeAsync(StateHasChanged);
+        };
+        _timer.Start();
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

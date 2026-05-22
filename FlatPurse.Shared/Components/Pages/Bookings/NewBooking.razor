@@ -196,7 +196,7 @@ else
         var booking = await BookingService.CreateBookingAsync(req);
 
         if (booking != null)
-            Nav.NavigateTo("/bookings");
+            Nav.NavigateTo("/bookings/success");
         else
         {
             _errorMessage = "Failed to create booking. The slot may no longer be available.";

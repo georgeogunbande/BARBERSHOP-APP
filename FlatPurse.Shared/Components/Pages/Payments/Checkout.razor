@@ -158,7 +158,7 @@
 
         var payment = await PaymentService.ChargeCardAsync(req);
         if (payment != null && payment.Status == PaymentStatus.Succeeded)
-            _successMessage = $"Payment of ${_amount + _tipAmount:F2} successful!";
+            Nav.NavigateTo($"/payments/success?amount={_amount:F2}&tip={_tipAmount:F2}");
         else
             _errorMessage = "Charge failed. Please try again.";
 
@@ -180,7 +180,7 @@
 
         var payment = await PaymentService.RecordCashAsync(req);
         if (payment != null)
-            _successMessage = $"Cash payment of ${_amount + _tipAmount:F2} recorded.";
+            Nav.NavigateTo($"/payments/success?amount={_amount:F2}&tip={_tipAmount:F2}");
         else
             _errorMessage = "Failed to record cash payment.";
 
