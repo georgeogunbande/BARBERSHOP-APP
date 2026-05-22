@@ -46,7 +46,7 @@ else
     <div class="client-grid">
         @foreach (var client in _clients)
         {
-            <ClientCard Client="@client" OnClick="() => Nav.NavigateTo($"/clients/{client.Id}")" />
+            <ClientCard Client="@client" OnClick="@(() => Nav.NavigateTo($"/clients/{client.Id}"))" />
         }
     </div>
 

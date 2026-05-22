@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Razor">
   <PropertyGroup>
     <TargetFrameworks>net9.0-android;net9.0-ios;net9.0-maccatalyst;net9.0-windows10.0.19041.0</TargetFrameworks>
     <OutputType>Exe</OutputType>
@@ -12,11 +12,22 @@
     <ApplicationVersion>1</ApplicationVersion>
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
   </PropertyGroup>
+  <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
+    <WindowsPackageType>None</WindowsPackageType>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Maui.Controls" Version="9.0.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="9.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="9.0.0" ExcludeAssets="build;buildTransitive" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FlatPurse.Shared\FlatPurse.Shared.csproj" />
   </ItemGroup>
+
+  <!-- Stub targets required by Microsoft.AspNetCore.Components.WebView.Maui -->
+  <Target Name="StaticWebAssetsPrepareForRun" />
+  <Target Name="StaticWebAssetsPrepareForPublish" />
+  <Target Name="LoadStaticWebAssetsPublishManifest" />
+
 </Project>
