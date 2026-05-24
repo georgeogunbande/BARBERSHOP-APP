@@ -14,7 +14,7 @@
         <div class="alert alert-error">@_errorMessage</div>
     }
 
-    <EditForm Model="@_model" OnValidSubmit="HandleRegister">
+    <EditForm Model="@_model" OnValidSubmit="HandleRegister" FormName="register-form">
         <DataAnnotationsValidator />
 
         <div class="form-row">

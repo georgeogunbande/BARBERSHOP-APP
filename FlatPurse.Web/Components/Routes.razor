@@ -1,7 +1,7 @@
 @using FlatPurse.Components
 @using FlatPurse.Components.Layout
 
-<Router AppAssembly="@typeof(FlatPurse.Components.App).Assembly"
+<Router AppAssembly="@typeof(FlatPurse.Web.Components.Routes).Assembly"
         AdditionalAssemblies="@(new[] { typeof(FlatPurse.Components.App).Assembly })">
     <Found Context="routeData">
         <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
