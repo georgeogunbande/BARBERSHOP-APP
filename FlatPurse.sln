@@ -12,6 +12,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlatPurse.Mobile", "FlatPur
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlatPurse.PublicMobile", "FlatPurse.PublicMobile\FlatPurse.PublicMobile.csproj", "{20397A77-4513-4266-B275-0C20C00E3860}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlatPurse.PublicWebs", "FlatPurse.PublicWebs\FlatPurse.PublicWebs.csproj", "{970FAB92-A9EF-4B81-8704-938880CA4B6A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -38,6 +40,10 @@ Global
 		{20397A77-4513-4266-B275-0C20C00E3860}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{20397A77-4513-4266-B275-0C20C00E3860}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{20397A77-4513-4266-B275-0C20C00E3860}.Release|Any CPU.Build.0 = Release|Any CPU
+		{970FAB92-A9EF-4B81-8704-938880CA4B6A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{970FAB92-A9EF-4B81-8704-938880CA4B6A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{970FAB92-A9EF-4B81-8704-938880CA4B6A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{970FAB92-A9EF-4B81-8704-938880CA4B6A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
