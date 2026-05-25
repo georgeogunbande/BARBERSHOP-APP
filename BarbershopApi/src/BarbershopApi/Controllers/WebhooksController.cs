@@ -1,5 +1,6 @@
 using BarbershopApi.Data;
 using BarbershopApi.Models.Enums;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Stripe;
 using StripePayout = Stripe.Payout;
@@ -84,5 +85,19 @@ public class WebhooksController(AppDbContext db, IConfiguration config, ILogger<
         if (stripePayout == null) return;
         logger.LogInformation("Payout {Id} with status {Status}", stripePayout.Id, stripePayout.Status);
         await Task.CompletedTask;
+    }
+
+    [HttpPost("twilio")]
+    [AllowAnonymous]
+    public async Task<IActionResult> TwilioWebhook()
+    {
+        var form = await Request.ReadFormAsync();
+        var messageSid = form["MessageSid"].ToString();
+        var status = form["MessageStatus"].ToString();
+
+        logger.LogInformation("Twilio status update: {Sid} → {Status}", messageSid, status);
+
+        // AutoPilotEvent does not currently have ExternalRef — log only
+        return Ok(new { received = true });
     }
 }
