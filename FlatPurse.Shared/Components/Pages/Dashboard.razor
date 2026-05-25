@@ -197,6 +197,26 @@
     </div>
 </div>
 
+<div class="card" style="margin-top:14px">
+    <div class="card-header">
+        <span class="card-title">Quick Actions</span>
+    </div>
+    <div style="padding:16px 20px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+        <a href="/bookings/new" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px;border-radius:12px;background:var(--purple-soft);border:1px solid var(--purple-mid);cursor:pointer;text-decoration:none">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <span style="font-size:12px;font-weight:700;color:var(--purple)">New Booking</span>
+        </a>
+        <a href="/payments/checkout?mode=cash" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px;border-radius:12px;background:var(--green-soft);border:1px solid #BBF7D0;cursor:pointer;text-decoration:none">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            <span style="font-size:12px;font-weight:700;color:var(--green-text)">Cash Mode</span>
+        </a>
+        <a href="/clients" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px;border-radius:12px;background:var(--amber-soft);border:1px solid #FDE68A;cursor:pointer;text-decoration:none">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            <span style="font-size:12px;font-weight:700;color:var(--amber-text)">Clients</span>
+        </a>
+    </div>
+</div>
+
 @code {
     private record ApptRow(string Time, string Initials, string Color, string Name, string Service, string Staff, int Price, string Status, string StatusLabel);
     private record TeamMember(string Initials, string Color, string Name, string Role, int Rev, int Apts, int Util);

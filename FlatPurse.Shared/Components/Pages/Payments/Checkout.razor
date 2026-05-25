@@ -1,122 +1,148 @@
 @page "/payments/checkout"
-@using System.Text.Json
-@using FlatPurse.Models
-@using FlatPurse.Components.Shared
-@inject FlatPurse.Services.PaymentService PaymentService
-@inject FlatPurse.Services.ClientService ClientService
-@inject FlatPurse.Services.BookingService BookingService
+@inject IJSRuntime JS
 @inject FlatPurse.Services.AppStateService AppState
 @inject NavigationManager Nav
 
 <div class="page-header">
     <div>
-        <button class="btn-back" @onclick="@(() => Nav.NavigateTo("/payments"))">&#8592; Payments</button>
-        <h1 class="page-title">Checkout</h1>
+        <h1 class="page-title">Close Out</h1>
+        <p class="page-subtitle">Complete the appointment and collect payment</p>
     </div>
+    <a href="/bookings" class="btn btn-secondary">Back</a>
 </div>
 
-<div class="checkout-layout">
-    <div class="checkout-main">
-        @if (!string.IsNullOrEmpty(_successMessage))
-        {
-            <div class="alert alert-success">@_successMessage</div>
-        }
-        @if (!string.IsNullOrEmpty(_errorMessage))
-        {
-            <div class="alert alert-error">@_errorMessage</div>
-        }
+@if (_isOffline)
+{
+    <div style="background:var(--amber-soft);border:1px solid #FDE68A;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:700;color:var(--amber-text);margin-bottom:16px;display:flex;align-items:center;gap:8px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>
+        Offline mode — Tap to Pay and Payment Link unavailable
+    </div>
+}
 
-        <div class="form-section">
-            <h3>Client Lookup</h3>
-            <input class="form-control" type="search" placeholder="Search client..."
-                   @bind="_clientSearch" @bind:event="oninput" @onkeyup="OnClientSearch" />
-            @if (_clientResults.Any())
-            {
-                <ul class="search-dropdown">
-                    @foreach (var c in _clientResults)
-                    {
-                        <li @onclick="() => SelectClient(c)">@c.FirstName @c.LastName — @c.Phone</li>
-                    }
-                </ul>
-            }
-            @if (_selectedClient != null)
-            {
-                <div class="selected-badge">
-                    <strong>@_selectedClient.FirstName @_selectedClient.LastName</strong>
-                    <button @onclick="() => { _selectedClient = null; _paymentMethods.Clear(); }">&#x2715;</button>
-                </div>
-
-                @if (_paymentMethods.Any())
+<div class="main-grid" style="grid-template-columns:1fr 320px">
+    <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="card">
+            <div class="card-header"><span class="card-title">Payment Method</span></div>
+            <div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
+                @foreach (var method in _methods)
                 {
-                    <div class="payment-methods">
-                        <h4>Cards on file</h4>
-                        @foreach (var pm in _paymentMethods)
+                    var disabled = _isOffline && method.RequiresNetwork;
+                    <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;border:2px solid @(_selectedMethod==method.Key ? "var(--purple)" : "var(--border)");cursor:@(disabled?"not-allowed":"pointer");opacity:@(disabled?"0.4":"1")"
+                         @onclick="()=>{ if(!disabled) _selectedMethod=method.Key; }">
+                        <span style="font-size:20px">@method.Icon</span>
+                        <div style="flex:1">
+                            <div style="font-size:14px;font-weight:700;color:var(--text)">@method.Label</div>
+                            <div style="font-size:12px;color:var(--text-3)">@method.Description</div>
+                        </div>
+                        @if (disabled)
                         {
-                            <div class="pm-card @(_selectedPmId == pm.Id.ToString() ? "selected" : "")"
-                                 @onclick="() => _selectedPmId = pm.Id.ToString()">
-                                <span>@pm.Brand.ToUpper() ****@pm.Last4</span>
-                                <span>@pm.ExpMonth/@pm.ExpYear</span>
-                                @if (pm.IsDefault) { <span class="badge">Default</span> }
+                            <span class="card-badge badge-amber">OFFLINE</span>
+                        }
+                        else if (_selectedMethod == method.Key)
+                        {
+                            <div style="width:18px;height:18px;border-radius:9px;background:var(--purple);display:flex;align-items:center;justify-content:center">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
                             </div>
                         }
                     </div>
                 }
-            }
-        </div>
-
-        <div class="form-section">
-            <h3>Amount</h3>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Amount</label>
-                    <input class="form-control" type="number" step="0.01" min="0" @bind="_amount" placeholder="0.00" />
-                </div>
-                <div class="form-group">
-                    <label>Tip</label>
-                    <input class="form-control" type="number" step="0.01" min="0" @bind="_tipAmount" placeholder="0.00" />
-                </div>
-            </div>
-            <div class="total-display">
-                Total: <strong>$@((_amount + _tipAmount).ToString("F2"))</strong>
             </div>
         </div>
 
-        <div class="payment-actions">
-            <button class="btn btn-primary" @onclick="ChargeCardAsync" disabled="@(_submitting || _selectedClient == null)">
-                Charge Card
-            </button>
-            <button class="btn btn-secondary" @onclick="RecordCashAsync" disabled="@(_submitting || _selectedClient == null)">
-                Cash
-            </button>
-            <button class="btn btn-outline" @onclick="GenerateLinkAsync" disabled="@(_submitting || _selectedClient == null)">
-                Payment Link
-            </button>
-        </div>
-
-        @if (!string.IsNullOrEmpty(_paymentLinkUrl))
+        @if (_selectedMethod == "interac")
         {
-            <div class="payment-link-display">
-                <p>Payment link generated:</p>
-                <a href="@_paymentLinkUrl" target="_blank">@_paymentLinkUrl</a>
+            <div class="card">
+                <div class="card-header"><span class="card-title">Interac e-Transfer Details</span></div>
+                <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+                    <div style="background:var(--surface-2);border-radius:10px;padding:14px 16px">
+                        <div style="font-size:12px;color:var(--text-3);margin-bottom:4px">Send to email</div>
+                        <div style="font-size:15px;font-weight:700;color:var(--text);font-family:var(--mono)">deposits@flatpurse.com</div>
+                    </div>
+                    <div style="background:var(--surface-2);border-radius:10px;padding:14px 16px">
+                        <div style="font-size:12px;color:var(--text-3);margin-bottom:4px">Reference code</div>
+                        <div style="font-size:15px;font-weight:700;color:var(--purple);font-family:var(--mono)">FPF-@_bookingRef</div>
+                    </div>
+                    <div style="background:var(--amber-soft);border:1px solid #FDE68A;border-radius:10px;padding:12px 14px;font-size:13px;color:var(--amber-text)">
+                        Include the reference code in the transfer message. Once confirmed, the payment will be marked as received.
+                    </div>
+                    <button class="btn btn-primary" @onclick="()=>_interacSent=true">Mark as Received ✓</button>
+                    @if (_interacSent)
+                    {
+                        <div style="background:var(--green-soft);border:1px solid #BBF7D0;border-radius:10px;padding:12px 14px;font-size:13px;font-weight:700;color:var(--green-text)">✓ Payment confirmed</div>
+                    }
+                </div>
             </div>
         }
+
+        <div class="card">
+            <div class="card-header"><span class="card-title">Add Tip</span></div>
+            <div style="padding:16px 20px">
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+                    @foreach (var pct in new[]{10,15,20,25})
+                    {
+                        <button class="btn @(_tipPct==pct ? "btn-primary" : "btn-secondary")" style="justify-content:center" @onclick="()=>{ _tipPct=pct; _customTip=0; }">@pct%</button>
+                    }
+                </div>
+                <input type="number" class="form-input" placeholder="Custom tip ($)" @bind="_customTip" style="max-width:150px" />
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <div class="card">
+            <div class="card-header"><span class="card-title">Receipt</span></div>
+            <div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;justify-content:space-between;font-size:13px">
+                    <span style="color:var(--text-3)">Service</span>
+                    <span style="font-weight:700;font-family:var(--mono)">$@_serviceAmount.ToString("F2")</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:13px">
+                    <span style="color:var(--text-3)">Tip</span>
+                    <span style="font-weight:700;font-family:var(--mono);color:var(--green)">$@_tipAmount.ToString("F2")</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:800;padding-top:10px;border-top:1px solid var(--border-2)">
+                    <span>Total</span>
+                    <span style="font-family:var(--mono);color:var(--text)">$@(_serviceAmount + _tipAmount).ToString("F2")</span>
+                </div>
+                <button class="btn btn-primary" style="width:100%;justify-content:center;padding:13px;margin-top:6px" @onclick="CompleteAsync" disabled="@_completing">
+                    @if (Mode == "cash" || _selectedMethod == "cash")
+                    {
+                        <text>@(_completing ? "Processing…" : "💵 Record Cash Payment")</text>
+                    }
+                    else
+                    {
+                        <text>@(_completing ? "Processing…" : "Complete & Charge")</text>
+                    }
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 
 @code {
-    private bool _submitting;
-    private string? _successMessage;
-    private string? _errorMessage;
-    private string? _paymentLinkUrl;
+    [SupplyParameterFromQuery] public string? Mode { get; set; }
 
-    private string _clientSearch = string.Empty;
-    private List<ClientDto> _clientResults = new();
-    private ClientDto? _selectedClient;
-    private List<PaymentMethodDto> _paymentMethods = new();
-    private string _selectedPmId = string.Empty;
-    private string _selectedBookingId = string.Empty;
-    private decimal _amount;
-    private decimal _tipAmount;
+    private bool _isOffline = false;
+    private bool _interacSent = false;
+    private bool _completing = false;
+    private string _selectedMethod = "cash";
+    private decimal _serviceAmount = 65.00m;
+    private int _tipPct = 0;
+    private decimal _customTip = 0;
+    private string _bookingRef = Guid.NewGuid().ToString()[..8].ToUpper();
+
+    private decimal _tipAmount => _customTip > 0 ? _customTip : Math.Round(_serviceAmount * _tipPct / 100, 2);
+
+    private record PaymentMethodOption(string Key, string Icon, string Label, string Description, bool RequiresNetwork);
+
+    private List<PaymentMethodOption> _methods =>
+    [
+        new("cash",    "💵", "Cash",              "No network required",       false),
+        new("card",    "💳", "Card",              "Charge saved card on file",  true),
+        new("tap",     "📱", "Tap to Pay",        "Contactless via terminal",   true),
+        new("link",    "🔗", "Payment Link",      "Send link to client",        true),
+        new("interac", "🍁", "Interac e-Transfer", "Zero processing fee",       false),
+    ];
 
     protected override void OnInitialized()
     {
@@ -124,92 +150,20 @@
             Nav.NavigateTo("/login");
     }
 
-    private async Task OnClientSearch(KeyboardEventArgs e)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_clientSearch.Length < 2) { _clientResults.Clear(); return; }
-        var results = await ClientService.SearchClientsAsync(_clientSearch);
-        _clientResults = results?.Take(5).ToList() ?? new();
-        StateHasChanged();
-    }
-
-    private async Task SelectClient(ClientDto client)
-    {
-        _selectedClient = client;
-        _clientSearch = string.Empty;
-        _clientResults.Clear();
-        var methods = await PaymentService.GetPaymentMethodsAsync(client.Id);
-        _paymentMethods = methods?.ToList() ?? new();
-        StateHasChanged();
-    }
-
-    private async Task ChargeCardAsync()
-    {
-        if (_selectedClient == null || !Guid.TryParse(_selectedPmId, out _)) return;
-        _submitting = true;
-        _errorMessage = null;
-        StateHasChanged();
-
-        var req = new ChargeRequest(
-            Guid.TryParse(_selectedBookingId, out var bid) ? bid : Guid.Empty,
-            _selectedClient.Id,
-            _selectedPmId,
-            _amount,
-            _tipAmount);
-
-        var payment = await PaymentService.ChargeCardAsync(req);
-        if (payment != null && payment.Status == PaymentStatus.Succeeded)
-            _successMessage = $"Payment of ${_amount + _tipAmount:F2} successful!";
-        else
-            _errorMessage = "Charge failed. Please try again.";
-
-        _submitting = false;
-        StateHasChanged();
-    }
-
-    private async Task RecordCashAsync()
-    {
-        if (_selectedClient == null) return;
-        _submitting = true;
-        _errorMessage = null;
-        StateHasChanged();
-
-        var req = new RecordCashPaymentRequest(
-            Guid.TryParse(_selectedBookingId, out var bid) ? bid : Guid.Empty,
-            _amount,
-            _tipAmount);
-
-        var payment = await PaymentService.RecordCashAsync(req);
-        if (payment != null)
-            _successMessage = $"Cash payment of ${_amount + _tipAmount:F2} recorded.";
-        else
-            _errorMessage = "Failed to record cash payment.";
-
-        _submitting = false;
-        StateHasChanged();
-    }
-
-    private async Task GenerateLinkAsync()
-    {
-        if (_selectedClient == null) return;
-        _submitting = true;
-        _errorMessage = null;
-        StateHasChanged();
-
-        var req = new GeneratePaymentLinkRequest(
-            Guid.TryParse(_selectedBookingId, out var bid) ? bid : Guid.Empty,
-            _amount,
-            null);
-
-        var link = await PaymentService.GeneratePaymentLinkAsync(req);
-        if (link != null)
+        if (firstRender)
         {
-            _paymentLinkUrl = link.Url;
-            _successMessage = "Payment link generated!";
+            _isOffline = !(await JS.InvokeAsync<bool>("eval", "navigator.onLine"));
+            if (Mode == "cash") _selectedMethod = "cash";
+            StateHasChanged();
         }
-        else
-            _errorMessage = "Failed to generate payment link.";
+    }
 
-        _submitting = false;
-        StateHasChanged();
+    private async Task CompleteAsync()
+    {
+        _completing = true;
+        await Task.Delay(800); // simulate processing
+        Nav.NavigateTo("/bookings");
     }
 }

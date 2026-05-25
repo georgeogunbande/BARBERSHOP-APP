@@ -747,3 +747,36 @@ tr:hover td { background: var(--surface-2); }
   .main-grid { grid-template-columns: 1fr; }
   .sidebar { display: none; }
 }
+
+/* ── Offline banner ── */
+.offline-banner {
+  background: var(--amber-soft);
+  border-bottom: 1px solid #FDE68A;
+  padding: 8px 28px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--amber-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Settings sections ── */
+.settings-section { margin-bottom: 24px; }
+.settings-section h3 { font-size: 15px; font-weight: 800; color: var(--text); margin-bottom: 12px; }
+.settings-desc { font-size: 13px; color: var(--text-3); margin-bottom: 16px; }
+.detail-grid { display: flex; flex-direction: column; gap: 12px; }
+.detail-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-2); }
+.detail-label { font-size: 12px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.8px; }
+.toggle-list { display: flex; flex-direction: column; gap: 14px; }
+.toggle-item { display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: var(--text); }
+.plan-card { background: var(--purple-soft); border: 1px solid var(--purple-mid); border-radius: 12px; padding: 16px 20px; margin-bottom: 16px; }
+.plan-name { font-size: 20px; font-weight: 800; color: var(--purple); }
+.channel-card { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--border-2); }
+.channel-type { font-size: 14px; font-weight: 700; color: var(--text); }
+.channel-status { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 12px; }
+.status-connected { background: var(--green-soft); color: var(--green-text); }
+.status-disconnected { background: var(--border-2); color: var(--text-3); }
+.tab-btn { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--text-3); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; background: none; border-top: none; border-left: none; border-right: none; font-family: var(--font); }
+.tab-btn.active { color: var(--purple); border-bottom-color: var(--purple); font-weight: 700; }
+.tab-btn:hover { color: var(--text); }

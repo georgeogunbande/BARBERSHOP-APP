@@ -10,11 +10,13 @@
     <h1 class="page-title">Settings</h1>
 </div>
 
-<div class="tab-bar">
-    <button class="tab-btn @(_activeTab == "Business" ? "active" : "")" @onclick='() => _activeTab = "Business"'>Business</button>
-    <button class="tab-btn @(_activeTab == "Plan" ? "active" : "")" @onclick='() => _activeTab = "Plan"'>Plan</button>
-    <button class="tab-btn @(_activeTab == "Notifications" ? "active" : "")" @onclick='() => _activeTab = "Notifications"'>Notifications</button>
-    <button class="tab-btn @(_activeTab == "Channels" ? "active" : "")" @onclick='() => _activeTab = "Channels"'>Channels</button>
+<div class="tab-bar" style="margin-bottom:20px">
+    <button class="tab-btn @(_tab == "business" ? "active" : "")" @onclick='()=>_tab="business"'>Business</button>
+    <button class="tab-btn @(_tab == "plan" ? "active" : "")" @onclick='()=>_tab="plan"'>Plan</button>
+    <button class="tab-btn @(_tab == "notifications" ? "active" : "")" @onclick='()=>_tab="notifications"'>Notifications</button>
+    <button class="tab-btn @(_tab == "payments" ? "active" : "")" @onclick='()=>_tab="payments"'>Payments</button>
+    <button class="tab-btn @(_tab == "integrations" ? "active" : "")" @onclick='()=>_tab="integrations"'>Integrations</button>
+    <button class="tab-btn @(_tab == "channels" ? "active" : "")" @onclick='()=>_tab="channels"'>Channels</button>
 </div>
 
 @if (_loading)
@@ -23,178 +25,342 @@
 }
 else
 {
-    <div class="tab-content">
-        @if (_activeTab == "Business")
-        {
-            <div class="settings-section">
-                <h3>Business Information</h3>
+    @if (_tab == "business")
+    {
+        <div class="card">
+            <div class="card-header"><span class="card-title">Business Information</span></div>
+            <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
                 @if (AppState.CurrentUser?.Business != null)
                 {
-                    <div class="detail-grid">
-                        <div class="detail-item">
-                            <span class="detail-label">Business Name</span>
-                            <span>@AppState.CurrentUser.Business.Name</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">City</span>
-                            <span>@(AppState.CurrentUser.Business.City ?? "Not set")</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Type</span>
-                            <span>@(AppState.CurrentUser.Business.Type ?? "Not set")</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Booking Handle</span>
-                            <span>@(AppState.CurrentUser.Business.BookingHandle ?? "Not set")</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Plan</span>
-                            <span>@AppState.CurrentUser.Business.Plan</span>
-                        </div>
+                    <div class="form-group">
+                        <label class="form-label">Business Name</label>
+                        <div style="font-size:14px;font-weight:600;color:var(--text)">@AppState.CurrentUser.Business.Name</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">City</label>
+                        <div style="font-size:14px;color:var(--text-2)">@(AppState.CurrentUser.Business.City ?? "Not set")</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Booking Handle</label>
+                        <div style="font-size:14px;font-family:var(--mono);color:var(--purple)">@(AppState.CurrentUser.Business.BookingHandle != null ? $"book.flatpurse.com/{AppState.CurrentUser.Business.BookingHandle}" : "Not set")</div>
                     </div>
                 }
             </div>
-
-            <div class="settings-section">
-                <h3>Your Profile</h3>
-                <div class="detail-grid">
-                    <div class="detail-item">
-                        <span class="detail-label">Name</span>
-                        <span>@AppState.CurrentUser?.FirstName @AppState.CurrentUser?.LastName</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="detail-label">Email</span>
-                        <span>@AppState.CurrentUser?.Email</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="detail-label">Role</span>
-                        <span>@AppState.CurrentUser?.Role</span>
-                    </div>
+        </div>
+        <div class="card" style="margin-top:14px">
+            <div class="card-header"><span class="card-title">Your Profile</span></div>
+            <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+                <div class="form-group">
+                    <label class="form-label">Name</label>
+                    <div style="font-size:14px;color:var(--text)">@AppState.CurrentUser?.FirstName @AppState.CurrentUser?.LastName</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <div style="font-size:14px;color:var(--text-2)">@AppState.CurrentUser?.Email</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Role</label>
+                    <div style="font-size:14px;color:var(--text-2)">@AppState.CurrentUser?.Role</div>
                 </div>
             </div>
-        }
-        else if (_activeTab == "Plan")
-        {
-            <div class="settings-section">
-                <h3>Subscription</h3>
+        </div>
+    }
+    else if (_tab == "plan")
+    {
+        <div class="card">
+            <div class="card-header"><span class="card-title">Subscription</span></div>
+            <div style="padding:20px">
                 @if (_subscription != null)
                 {
-                    <div class="plan-card">
-                        <div class="plan-name">@_subscription.Plan</div>
-                        @if (_subscription.IsTrialing && _subscription.TrialEndsAt.HasValue)
+                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+                        <div style="font-size:24px;font-weight:800;color:var(--text)">@_subscription.Plan</div>
+                        @if (_subscription.IsTrialing)
                         {
-                            <div class="trial-badge">Trial ends @_subscription.TrialEndsAt.Value.ToString("MMM d, yyyy")</div>
+                            <span class="card-badge badge-amber">TRIAL</span>
                         }
-                        <div class="plan-status @(_subscription.IsActive ? "active" : "inactive")">
-                            @(_subscription.IsActive ? "Active" : "Inactive")
-                        </div>
-                        @if (_subscription.CurrentPeriodEnd.HasValue)
+                        else if (_subscription.IsActive)
                         {
-                            <p>Renews @_subscription.CurrentPeriodEnd.Value.ToString("MMM d, yyyy")</p>
+                            <span class="card-badge badge-green">ACTIVE</span>
                         }
                     </div>
-                    <div class="plan-options">
+                    @if (_subscription.CurrentPeriodEnd.HasValue)
+                    {
+                        <p style="font-size:13px;color:var(--text-3);margin-bottom:20px">Renews @_subscription.CurrentPeriodEnd.Value.ToString("MMM d, yyyy")</p>
+                    }
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
                         @foreach (var plan in Enum.GetValues<SubscriptionPlan>())
                         {
-                            <div class="plan-option @(_subscription.Plan == plan ? "current" : "")">
-                                <h4>@plan</h4>
+                            <div style="border:1px solid var(--border);border-radius:12px;padding:16px;@(_subscription.Plan == plan ? "border-color:var(--purple);background:var(--purple-soft)" : "")">
+                                <div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:4px">@plan</div>
                                 @if (_subscription.Plan == plan)
                                 {
-                                    <span class="badge">Current</span>
+                                    <span class="card-badge badge-purple">CURRENT</span>
                                 }
                                 else
                                 {
-                                    <button class="btn btn-outline">Upgrade</button>
+                                    <button class="btn btn-secondary" style="font-size:12px;padding:6px 12px;margin-top:8px">Upgrade</button>
                                 }
                             </div>
                         }
                     </div>
                 }
             </div>
-        }
-        else if (_activeTab == "Notifications")
-        {
-            <div class="settings-section">
-                <h3>Notification Preferences</h3>
-                <p class="settings-desc">Configure which notifications you receive.</p>
+        </div>
+    }
+    else if (_tab == "notifications")
+    {
+        <div class="card">
+            <div class="card-header"><span class="card-title">Notification Preferences</span></div>
+            <div style="padding:20px;display:flex;flex-direction:column;gap:16px">
                 @if (_notifications != null)
                 {
-                    <div class="toggle-list">
-                        <div class="toggle-item">
-                            <span>Booking Confirmations</span>
-                            <input type="checkbox" checked="@_notifications.BookingConfirmations" />
+                    @foreach (var (label, val) in new[]{
+                        ("Booking Confirmations", _notifications.BookingConfirmations),
+                        ("Booking Reminders", _notifications.BookingReminders),
+                        ("Payment Receipts", _notifications.PaymentReceipts),
+                        ("AutoPilot Alerts", _notifications.AutoPilotAlerts)
+                    })
+                    {
+                        <div style="display:flex;justify-content:space-between;align-items:center">
+                            <span style="font-size:14px;color:var(--text)">@label</span>
+                            <div style="width:40px;height:22px;border-radius:11px;background:@(val ? "var(--purple)" : "var(--border)");cursor:pointer;position:relative;transition:background 0.2s">
+                                <div style="width:16px;height:16px;border-radius:8px;background:#fff;position:absolute;top:3px;@(val ? "right:3px" : "left:3px");transition:all 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2)"></div>
+                            </div>
                         </div>
-                        <div class="toggle-item">
-                            <span>Booking Reminders</span>
-                            <input type="checkbox" checked="@_notifications.BookingReminders" />
-                        </div>
-                        <div class="toggle-item">
-                            <span>Payment Receipts</span>
-                            <input type="checkbox" checked="@_notifications.PaymentReceipts" />
-                        </div>
-                        <div class="toggle-item">
-                            <span>AutoPilot Alerts</span>
-                            <input type="checkbox" checked="@_notifications.AutoPilotAlerts" />
-                        </div>
+                    }
+                }
+            </div>
+        </div>
+    }
+    else if (_tab == "payments")
+    {
+        <div class="card">
+            <div class="card-header"><span class="card-title">Deposit Settings</span></div>
+            <div style="padding:20px;display:flex;flex-direction:column;gap:16px">
+                <div class="form-group">
+                    <label class="form-label">Default Deposit %</label>
+                    <input type="number" class="form-input" value="25" min="0" max="100" style="max-width:120px" />
+                    <div style="font-size:12px;color:var(--text-3);margin-top:4px">Applied automatically for clients with 2+ no-shows</div>
+                </div>
+            </div>
+        </div>
+        <div class="card" style="margin-top:14px">
+            <div class="card-header">
+                <span class="card-title">Interac e-Transfer Deposits</span>
+                <span class="card-badge badge-green">ZERO FEES</span>
+            </div>
+            <div style="padding:20px">
+                <p style="font-size:13px;color:var(--text-2);margin-bottom:16px">Accept deposits via Interac e-Transfer — no processing fee. Clients send directly to your business email with a unique reference code.</p>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+                    <span style="font-size:14px;font-weight:600;color:var(--text)">Enable Interac deposits</span>
+                    <div style="width:40px;height:22px;border-radius:11px;background:@(_interacEnabled ? "var(--purple)" : "var(--border)");cursor:pointer;position:relative" @onclick="()=>_interacEnabled=!_interacEnabled">
+                        <div style="width:16px;height:16px;border-radius:8px;background:#fff;position:absolute;top:3px;@(_interacEnabled ? "right:3px" : "left:3px");box-shadow:0 1px 3px rgba(0,0,0,0.2)"></div>
+                    </div>
+                </div>
+                @if (_interacEnabled)
+                {
+                    <div class="form-group">
+                        <label class="form-label">Deposit Email Address</label>
+                        <input type="email" class="form-input" @bind="_interacEmail" placeholder="deposits@yourbarbershop.com" />
+                    </div>
+                    <div style="background:var(--green-soft);border:1px solid #BBF7D0;border-radius:10px;padding:12px 14px;font-size:13px;color:var(--green-text)">
+                        ✓ Clients will see: "Send [amount] to @_interacEmail with reference FPF-[booking id]"
                     </div>
                 }
             </div>
-        }
-        else if (_activeTab == "Channels")
-        {
-            <div class="settings-section">
-                <h3>Connected Channels</h3>
-                <p class="settings-desc">Connect communication channels for messaging and autopilot.</p>
-                @if (_channels != null && _channels.Any())
+        </div>
+    }
+    else if (_tab == "integrations")
+    {
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">SMS Bundle</span>
+                <span class="card-badge badge-purple">@_smsPlan PLAN</span>
+            </div>
+            <div style="padding:20px">
+                <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px">
+                    <span style="color:var(--text-3)">Used this month</span>
+                    <span style="font-weight:700;font-family:var(--mono)">@_smsUsed / @_smsTotal SMS</span>
+                </div>
+                <div style="height:6px;border-radius:3px;background:var(--border-2);overflow:hidden;margin-bottom:12px">
+                    <div style="height:100%;border-radius:3px;background:@(_smsPercent > 80 ? "var(--red)" : "var(--purple)");width:@(_smsPercent)%"></div>
+                </div>
+                @if (_smsPercent > 80)
                 {
-                    <div class="channels-list">
-                        @foreach (var ch in _channels)
-                        {
-                            <div class="channel-card">
-                                <span class="channel-type">@ch.Type</span>
-                                <span class="channel-status status-@ch.Status.ToString().ToLower()">@ch.Status</span>
-                                @if (ch.ExternalAccountName != null)
-                                {
-                                    <span class="channel-account">@ch.ExternalAccountName</span>
-                                }
-                            </div>
-                        }
+                    <div style="background:var(--amber-soft);border:1px solid #FDE68A;border-radius:9px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--amber-text);margin-bottom:12px">
+                        <span>⚠ Over 80% used — top up to avoid interruptions</span>
+                        <button class="btn btn-secondary" style="font-size:12px;padding:5px 12px">Top Up</button>
                     </div>
+                }
+                <div style="font-size:12px;color:var(--text-3)">Resets on the 1st of each month. Included in Growth plan.</div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+            <div class="card-header">
+                <span class="card-title">A2P 10DLC Registration</span>
+                <span class="card-badge @(_10dlcStatus == "Registered" ? "badge-green" : _10dlcStatus == "Pending" ? "badge-amber" : "badge-red")">@_10dlcStatus.ToUpper()</span>
+            </div>
+            <div style="padding:20px">
+                @if (_10dlcStatus == "Unregistered")
+                {
+                    <div style="background:var(--red-soft);border:1px solid #FECACA;border-radius:10px;padding:12px 14px;font-size:13px;color:var(--red);margin-bottom:16px">
+                        ⚠ SMS delivery may fail without carrier registration. US/Canada carriers require A2P 10DLC for business messaging.
+                    </div>
+                    @if (!_show10dlcForm)
+                    {
+                        <button class="btn btn-primary" @onclick="()=>_show10dlcForm=true">Register now →</button>
+                    }
+                    else
+                    {
+                        <div style="display:flex;flex-direction:column;gap:12px">
+                            <div class="form-group">
+                                <label class="form-label">Business Legal Name</label>
+                                <input type="text" class="form-input" @bind="_dlcForm.LegalName" placeholder="Stride Cuts Inc." />
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">EIN / Business Number</label>
+                                <input type="text" class="form-input" @bind="_dlcForm.Ein" placeholder="12-3456789" />
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Business Phone</label>
+                                <input type="tel" class="form-input" @bind="_dlcForm.Phone" placeholder="+17801234567" />
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Street Address</label>
+                                <input type="text" class="form-input" @bind="_dlcForm.Street" />
+                            </div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+                                <div class="form-group">
+                                    <label class="form-label">City</label>
+                                    <input type="text" class="form-input" @bind="_dlcForm.City" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Province</label>
+                                    <input type="text" class="form-input" @bind="_dlcForm.State" placeholder="AB" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Postal Code</label>
+                                    <input type="text" class="form-input" @bind="_dlcForm.PostalCode" placeholder="T5A 0A1" />
+                                </div>
+                            </div>
+                            <div style="display:flex;gap:10px">
+                                <button class="btn btn-primary" @onclick="Submit10DlcAsync" disabled="@_dlcSubmitting">
+                                    @(_dlcSubmitting ? "Submitting…" : "Submit Registration")
+                                </button>
+                                <button class="btn btn-secondary" @onclick="()=>_show10dlcForm=false">Cancel</button>
+                            </div>
+                            @if (!string.IsNullOrEmpty(_dlcError))
+                            {
+                                <div class="error-msg">@_dlcError</div>
+                            }
+                        </div>
+                    }
+                }
+                else if (_10dlcStatus == "Pending")
+                {
+                    <p style="font-size:13px;color:var(--text-2)">Your registration is being reviewed by Twilio and the carriers. This typically takes 3–5 business days.</p>
                 }
                 else
                 {
-                    <EmptyState Message="No channels connected yet." />
+                    <div style="color:var(--green-text);font-size:13px;font-weight:600">✓ Your business is registered for A2P messaging. SMS delivery rates are optimal.</div>
                 }
             </div>
-        }
-    </div>
+        </div>
+    }
+    else if (_tab == "channels")
+    {
+        <div class="card">
+            <div class="card-header"><span class="card-title">Connected Channels</span></div>
+            <div style="padding:6px 0">
+                @if (_channels != null && _channels.Any())
+                {
+                    @foreach (var ch in _channels)
+                    {
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid var(--border-2)">
+                            <span style="font-size:14px;font-weight:700;color:var(--text)">@ch.Type</span>
+                            <span class="card-badge @(ch.Status == ChannelStatus.Connected ? "badge-green" : "badge-red")">@ch.Status</span>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div style="padding:20px"><EmptyState Message="No channels connected yet." /></div>
+                }
+            </div>
+        </div>
+    }
 }
 
 @code {
     private bool _loading = true;
-    private string _activeTab = "Business";
+    private string _tab = "business";
     private SubscriptionDto? _subscription;
     private NotificationSettingsDto? _notifications;
     private IEnumerable<ChannelDto>? _channels;
+    private bool _interacEnabled = false;
+    private string _interacEmail = "";
+
+    // SMS stats
+    private int _smsUsed = 247;
+    private int _smsTotal = 1000;
+    private int _smsPercent => (int)((_smsUsed * 100.0) / _smsTotal);
+    private string _smsPlan = "GROWTH";
+
+    // 10DLC
+    private string _10dlcStatus = "Unregistered";
+    private bool _show10dlcForm = false;
+    private bool _dlcSubmitting = false;
+    private string? _dlcError;
+    private Register10DlcFormModel _dlcForm = new();
+
+    private class Register10DlcFormModel
+    {
+        public string LegalName { get; set; } = "";
+        public string Ein { get; set; } = "";
+        public string? Phone { get; set; }
+        public string? Street { get; set; }
+        public string? City { get; set; }
+        public string? State { get; set; }
+        public string? PostalCode { get; set; }
+    }
 
     protected override async Task OnInitializedAsync()
     {
-        if (!AppState.IsAuthenticated)
-        {
-            Nav.NavigateTo("/login");
-            return;
-        }
+        if (!AppState.IsAuthenticated) { Nav.NavigateTo("/login"); return; }
 
         var settings = await ApiService.GetAsync<BusinessSettingsDto>("settings");
-        if (settings != null)
-        {
-            _notifications = settings.Notifications;
-        }
-
+        if (settings != null) _notifications = settings.Notifications;
         _subscription = await ApiService.GetAsync<SubscriptionDto>("settings/subscription");
         _channels = await ApiService.GetAsync<IEnumerable<ChannelDto>>("channels");
-
         _loading = false;
-        StateHasChanged();
+    }
+
+    private async Task Submit10DlcAsync()
+    {
+        _dlcSubmitting = true;
+        _dlcError = null;
+        try
+        {
+            var req = new
+            {
+                legalName = _dlcForm.LegalName,
+                ein = _dlcForm.Ein,
+                phone = _dlcForm.Phone,
+                street = _dlcForm.Street,
+                city = _dlcForm.City,
+                state = _dlcForm.State,
+                postalCode = _dlcForm.PostalCode
+            };
+            var result = await ApiService.PostAsync<object>("messaging/sms/register-10dlc", req);
+            if (result != null)
+            {
+                _10dlcStatus = "Pending";
+                _show10dlcForm = false;
+            }
+            else _dlcError = "Registration failed. Please try again.";
+        }
+        catch { _dlcError = "Connection error. Please try again."; }
+        finally { _dlcSubmitting = false; }
     }
 }

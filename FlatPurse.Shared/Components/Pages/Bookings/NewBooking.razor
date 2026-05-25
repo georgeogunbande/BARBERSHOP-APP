@@ -9,102 +9,202 @@
 
 <div class="page-header">
     <div>
-        <button class="btn-back" @onclick="@(() => Nav.NavigateTo("/bookings"))">&#8592; Bookings</button>
         <h1 class="page-title">New Booking</h1>
+        <p class="page-subtitle">Schedule an appointment</p>
     </div>
+    <a href="/bookings" class="btn btn-secondary">Cancel</a>
 </div>
 
-@if (_loading)
-{
-    <LoadingSpinner />
-}
+@if (_loading) { <LoadingSpinner /> }
 else
 {
-    <div class="booking-form">
-        @if (!string.IsNullOrEmpty(_errorMessage))
-        {
-            <div class="alert alert-error">@_errorMessage</div>
-        }
-
-        <div class="form-section">
-            <h3>Client</h3>
-            <div class="form-group">
-                <input class="form-control" type="search" placeholder="Search client..." @bind="_clientSearch" @bind:event="oninput" @onkeyup="OnClientSearch" />
-                @if (_clientResults.Any())
-                {
-                    <ul class="search-dropdown">
-                        @foreach (var c in _clientResults)
-                        {
-                            <li @onclick="() => SelectClient(c)">@c.FirstName @c.LastName — @c.Phone</li>
-                        }
-                    </ul>
-                }
-                @if (_selectedClient != null)
-                {
-                    <div class="selected-badge">
-                        Selected: <strong>@_selectedClient.FirstName @_selectedClient.LastName</strong>
-                        <button @onclick="() => _selectedClient = null">&#x2715;</button>
+    <div class="main-grid" style="grid-template-columns:1fr 320px">
+        <div style="display:flex;flex-direction:column;gap:14px">
+            <div class="card">
+                <div class="card-header"><span class="card-title">Client</span></div>
+                <div style="padding:16px 20px">
+                    <div class="form-group">
+                        <label class="form-label">Search Client</label>
+                        <input type="text" class="form-input" @bind="_clientSearch" @bind:event="oninput" @onkeyup="OnClientSearchAsync" placeholder="Name or phone…" />
                     </div>
-                }
-            </div>
-        </div>
-
-        <div class="form-section">
-            <h3>Service</h3>
-            <div class="form-group">
-                <InputSelect class="form-control" @bind-Value="_selectedServiceId">
-                    <option value="">Choose service...</option>
-                    @foreach (var svc in _services)
+                    @if (_clientResults.Count > 0)
                     {
-                        <option value="@svc.Id">@svc.Name — $@svc.Price (@svc.DurationMins min)</option>
+                        <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:12px">
+                            @foreach (var c in _clientResults)
+                            {
+                                <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border-2);background:@(_selectedClient?.Id == c.Id ? "var(--purple-soft)" : "var(--surface)")" @onclick="()=>SelectClient(c)">
+                                    <div style="width:32px;height:32px;border-radius:16px;background:var(--purple);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800">@c.FirstName[0]@c.LastName[0]</div>
+                                    <div>
+                                        <div style="font-size:14px;font-weight:700;color:var(--text)">@c.FirstName @c.LastName</div>
+                                        <div style="font-size:12px;color:var(--text-3)">@c.Phone · @c.VisitCount visits</div>
+                                    </div>
+                                    @if (c.Tags != null && c.Tags.Contains(ClientTag.FrequentCanceller))
+                                    {
+                                        <span class="card-badge badge-red" style="margin-left:auto">FREQUENT CANCELLER</span>
+                                    }
+                                </div>
+                            }
+                        </div>
                     }
-                </InputSelect>
-            </div>
-        </div>
-
-        <div class="form-section">
-            <h3>Staff</h3>
-            <div class="form-group">
-                <InputSelect class="form-control" @bind-Value="_selectedStaffId">
-                    <option value="">Choose staff...</option>
-                    @foreach (var s in _staff)
+                    @if (_selectedClient != null)
                     {
-                        <option value="@s.Id">@s.FirstName @s.LastName</option>
+                        var rule = GetDepositRule(_selectedClient);
+                        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:12px">
+                            <div style="width:36px;height:36px;border-radius:18px;background:var(--purple);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800">@_selectedClient.FirstName[0]@_selectedClient.LastName[0]</div>
+                            <div style="flex:1">
+                                <div style="font-size:14px;font-weight:700;color:var(--text)">@_selectedClient.FirstName @_selectedClient.LastName</div>
+                                <div style="font-size:12px;color:var(--text-3)">LTV @_selectedClient.LifetimeValue.ToString("C0") · @_selectedClient.VisitCount visits</div>
+                            </div>
+                            <button style="font-size:12px;color:var(--text-3);background:none;border:none;cursor:pointer" @onclick='()=>{ _selectedClient=null; _clientSearch=""; }'>✕</button>
+                        </div>
+                        @if (rule.Required)
+                        {
+                            <div style="background:var(--red-soft);border:1px solid #FECACA;border-radius:9px;padding:10px 14px;font-size:13px;font-weight:600;color:var(--red);margin-top:10px;display:flex;align-items:center;gap:8px">
+                                <span>🛡</span> Deposit required — @rule.Reason
+                            </div>
+                        }
+                        else if (rule.Recommended)
+                        {
+                            <div style="background:var(--amber-soft);border:1px solid #FDE68A;border-radius:9px;padding:10px 14px;font-size:13px;font-weight:600;color:var(--amber-text);margin-top:10px;display:flex;align-items:center;gap:8px">
+                                <span>⚠</span> New client — deposit recommended
+                            </div>
+                        }
                     }
-                </InputSelect>
-            </div>
-        </div>
-
-        <div class="form-section">
-            <h3>Date & Time</h3>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Date</label>
-                    <input type="date" class="form-control" @bind="_bookingDate" @bind:after="LoadSlotsAsync" />
                 </div>
             </div>
-            @if (_availableSlots.Any())
-            {
-                <div class="slots-grid">
-                    @foreach (var slot in _availableSlots)
+
+            <div class="card">
+                <div class="card-header"><span class="card-title">Service & Staff</span></div>
+                <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+                    <div class="form-group">
+                        <label class="form-label">Service</label>
+                        <select class="form-select" @bind="_selectedServiceId">
+                            <option value="">Select service…</option>
+                            @foreach (var s in _services)
+                            {
+                                <option value="@s.Id">@s.Name — $@s.Price (@s.DurationMins min)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Staff Member</label>
+                        <select class="form-select" @bind="_selectedStaffId">
+                            <option value="">Any available</option>
+                            @foreach (var s in _staff)
+                            {
+                                <option value="@s.Id">@s.FirstName @s.LastName</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Date</label>
+                        <input type="date" class="form-input" @bind="_bookingDate" @bind:after="LoadSlotsAsync" />
+                    </div>
+                    @if (_availableSlots.Any())
                     {
-                        <button class="slot-btn @(_selectedStartsAt == slot.StartsAt ? "selected" : "")"
-                                @onclick="() => SelectSlot(slot)">
-                            @slot.StartsAt.ToString("h:mm tt")
-                        </button>
+                        <div class="form-group">
+                            <label class="form-label">Time Slot</label>
+                            <div style="display:flex;flex-wrap:wrap;gap:8px">
+                                @foreach (var slot in _availableSlots)
+                                {
+                                    <button class="btn @(_selectedStartsAt == slot.StartsAt ? "btn-primary" : "btn-secondary")" style="font-size:12px;padding:6px 12px" @onclick="()=>SelectSlot(slot)">
+                                        @slot.StartsAt.ToString("h:mm tt")
+                                    </button>
+                                }
+                            </div>
+                        </div>
                     }
+                </div>
+            </div>
+
+            @if (_selectedClient != null && (GetDepositRule(_selectedClient).Required || GetDepositRule(_selectedClient).Recommended))
+            {
+                <div class="card">
+                    <div class="card-header"><span class="card-title">Deposit</span></div>
+                    <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+                        <div style="display:flex;align-items:center;justify-content:space-between">
+                            <label class="form-label" style="margin:0">Require deposit</label>
+                            <div style="width:40px;height:22px;border-radius:11px;background:@(_depositRequired ? "var(--purple)" : "var(--border)");cursor:pointer;position:relative" @onclick="()=>_depositRequired=!_depositRequired">
+                                <div style="width:16px;height:16px;border-radius:8px;background:#fff;position:absolute;top:3px;@(_depositRequired ? "right:3px" : "left:3px")"></div>
+                            </div>
+                        </div>
+                        @if (_depositRequired)
+                        {
+                            <div class="form-group">
+                                <label class="form-label">Deposit %</label>
+                                <input type="number" class="form-input" @bind="_depositPct" min="1" max="100" style="max-width:100px" />
+                                <div style="font-size:12px;color:var(--text-3);margin-top:4px">Client must pay before slot is confirmed</div>
+                            </div>
+                        }
+                    </div>
                 </div>
             }
+
+            <div class="form-group">
+                <label class="form-label">Notes</label>
+                <textarea class="form-textarea" @bind="_notes" placeholder="Special requests, preferences…"></textarea>
+            </div>
         </div>
 
-        <div class="form-group">
-            <label>Notes (optional)</label>
-            <textarea class="form-control" rows="3" @bind="_notes" placeholder="Any special requests..."></textarea>
+        <div>
+            <div class="card">
+                <div class="card-header"><span class="card-title">Summary</span></div>
+                <div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
+                    @if (_selectedClient != null)
+                    {
+                        <div style="display:flex;justify-content:space-between;font-size:13px">
+                            <span style="color:var(--text-3)">Client</span>
+                            <span style="font-weight:700">@_selectedClient.FirstName @_selectedClient.LastName</span>
+                        </div>
+                    }
+                    @{
+                        var svc = _services.FirstOrDefault(s => s.Id.ToString() == _selectedServiceId);
+                        var stf = _staff.FirstOrDefault(s => s.Id.ToString() == _selectedStaffId);
+                    }
+                    @if (svc != null)
+                    {
+                        <div style="display:flex;justify-content:space-between;font-size:13px">
+                            <span style="color:var(--text-3)">Service</span>
+                            <span style="font-weight:700">@svc.Name</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;font-size:13px">
+                            <span style="color:var(--text-3)">Price</span>
+                            <span style="font-weight:700;font-family:var(--mono)">$@svc.Price</span>
+                        </div>
+                        @if (_depositRequired)
+                        {
+                            <div style="display:flex;justify-content:space-between;font-size:13px">
+                                <span style="color:var(--text-3)">Deposit (@_depositPct%)</span>
+                                <span style="font-weight:700;font-family:var(--mono);color:var(--purple)">$@((svc.Price * _depositPct / 100m).ToString("F2"))</span>
+                            </div>
+                        }
+                    }
+                    @if (stf != null)
+                    {
+                        <div style="display:flex;justify-content:space-between;font-size:13px">
+                            <span style="color:var(--text-3)">Staff</span>
+                            <span style="font-weight:700">@stf.FirstName @stf.LastName</span>
+                        </div>
+                    }
+                    @if (_selectedStartsAt.HasValue)
+                    {
+                        <div style="display:flex;justify-content:space-between;font-size:13px">
+                            <span style="color:var(--text-3)">Time</span>
+                            <span style="font-weight:700">@_selectedStartsAt.Value.ToString("MMM d · h:mm tt")</span>
+                        </div>
+                    }
+                    <div style="padding-top:12px;border-top:1px solid var(--border-2)">
+                        @if (!string.IsNullOrEmpty(_errorMessage))
+                        {
+                            <div class="error-msg" style="margin-bottom:10px">@_errorMessage</div>
+                        }
+                        <button class="btn btn-primary" style="width:100%;justify-content:center" @onclick="CreateBookingAsync" disabled="@(_submitting || _selectedClient == null || string.IsNullOrEmpty(_selectedServiceId))">
+                            @(_submitting ? "Booking…" : "Confirm Booking")
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
-
-        <button class="btn btn-primary btn-full" @onclick="CreateBookingAsync" disabled="@_submitting">
-            @(_submitting ? "Creating..." : "Create Booking")
-        </button>
     </div>
 }
 
@@ -125,6 +225,19 @@ else
     private DateTime _bookingDate = DateTime.Today;
     private DateTime? _selectedStartsAt;
     private string _notes = string.Empty;
+    private bool _depositRequired = false;
+    private decimal _depositPct = 25;
+
+    private record DepositRule(bool Required, bool Recommended, string Reason);
+
+    private DepositRule GetDepositRule(ClientDto client)
+    {
+        if (client.Tags != null && client.Tags.Contains(ClientTag.FrequentCanceller))
+            return new DepositRule(true, false, "Frequent canceller on record");
+        if (client.VisitCount == 0)
+            return new DepositRule(false, true, "New client");
+        return new DepositRule(false, false, "");
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -144,7 +257,7 @@ else
         StateHasChanged();
     }
 
-    private async Task OnClientSearch(KeyboardEventArgs e)
+    private async Task OnClientSearchAsync(KeyboardEventArgs e)
     {
         if (_clientSearch.Length < 2) { _clientResults.Clear(); return; }
         var results = await ClientService.SearchClientsAsync(_clientSearch);
@@ -155,8 +268,10 @@ else
     private void SelectClient(ClientDto client)
     {
         _selectedClient = client;
-        _clientSearch = string.Empty;
+        _clientSearch = $"{client.FirstName} {client.LastName}";
         _clientResults.Clear();
+        var rule = GetDepositRule(client);
+        _depositRequired = rule.Required;
         StateHasChanged();
     }
 
@@ -185,13 +300,13 @@ else
     {
         if (_selectedClient == null) { _errorMessage = "Please select a client."; return; }
         if (!Guid.TryParse(_selectedServiceId, out var serviceId)) { _errorMessage = "Please select a service."; return; }
-        if (!Guid.TryParse(_selectedStaffId, out var staffId)) { _errorMessage = "Please select a staff member."; return; }
         if (_selectedStartsAt == null) { _errorMessage = "Please select a time slot."; return; }
 
         _submitting = true;
         _errorMessage = null;
         StateHasChanged();
 
+        Guid staffId = Guid.TryParse(_selectedStaffId, out var sid) ? sid : Guid.Empty;
         var req = new CreateBookingRequest(_selectedClient.Id, serviceId, staffId, _selectedStartsAt.Value, _notes);
         var booking = await BookingService.CreateBookingAsync(req);
 

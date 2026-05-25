@@ -9,11 +9,18 @@
     <link rel="stylesheet" href="_content/FlatPurse.Shared/app.css" />
     <link rel="stylesheet" href="css/app.css" />
     <HeadOutlet />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#534AB7" />
 </head>
 
 <body>
     <Routes />
     <script src="_framework/blazor.server.js"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js');
+      }
+    </script>
 </body>
 
 </html>
