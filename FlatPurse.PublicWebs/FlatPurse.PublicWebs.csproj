@@ -11,4 +11,14 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="9.0.16" PrivateAssets="all" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Pages\" />
+    <Folder Include="Services\" />
+    <Folder Include="wwwroot\css\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FlatPurse.Shared\FlatPurse.Shared.csproj" />
+  </ItemGroup>
+
 </Project>

@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using FlatPurse;
+using Microsoft.Extensions.Logging;
 
 namespace FlatPurse.Mobile
 {
@@ -16,9 +17,12 @@ namespace FlatPurse.Mobile
 
             builder.Services.AddMauiBlazorWebView();
 
+            var apiBaseUrl = "https://localhost:7001/"; // update with your API URL
+            builder.Services.AddFlatPurseMobileServices(apiBaseUrl);
+
 #if DEBUG
-    		builder.Services.AddBlazorWebViewDeveloperTools();
-    		builder.Logging.AddDebug();
+            builder.Services.AddBlazorWebViewDeveloperTools();
+            builder.Logging.AddDebug();
 #endif
 
             return builder.Build();
