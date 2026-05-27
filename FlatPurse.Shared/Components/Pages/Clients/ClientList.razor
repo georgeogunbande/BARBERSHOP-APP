@@ -1,4 +1,5 @@
 @page "/clients"
+@layout MainLayout
 @using FlatPurse.Models
 @using FlatPurse.Components.Shared
 @inject FlatPurse.Services.IClientService ClientService
@@ -57,6 +58,46 @@ else
     </div>
 }
 
+@if (_showAddModal)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h2>Add New Client</h2>
+                <button class="modal-close" @onclick="CloseModal">&#x2715;</button>
+            </div>
+            <div class="modal-body">
+                @if (!string.IsNullOrEmpty(_addError))
+                {
+                    <div class="alert alert-error" style="margin-bottom:16px">@_addError</div>
+                }
+                <div class="form-group">
+                    <label class="form-label">First Name *</label>
+                    <input class="form-control" type="text" @bind="_newFirstName" placeholder="First name" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Last Name *</label>
+                    <input class="form-control" type="text" @bind="_newLastName" placeholder="Last name" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input class="form-control" type="email" @bind="_newEmail" placeholder="client@email.com" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Phone</label>
+                    <input class="form-control" type="tel" @bind="_newPhone" placeholder="+1 (555) 000-0000" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="AddClientAsync" disabled="@_addingClient">
+                    @(_addingClient ? "Adding..." : "Add Client")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<ClientDto> _clients = new();
     private int _total;
@@ -68,6 +109,14 @@ else
     private string _selectedRisk = string.Empty;
     private bool _showAddModal;
     private System.Timers.Timer? _debounceTimer;
+
+    // Add Client modal fields
+    private string _newFirstName = string.Empty;
+    private string _newLastName = string.Empty;
+    private string? _newEmail;
+    private string? _newPhone;
+    private bool _addingClient;
+    private string? _addError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -128,5 +177,60 @@ else
     {
         _page++;
         await LoadClientsAsync();
+    }
+
+    private void CloseModal()
+    {
+        _showAddModal = false;
+        _newFirstName = string.Empty;
+        _newLastName = string.Empty;
+        _newEmail = null;
+        _newPhone = null;
+        _addError = null;
+    }
+
+    private async Task AddClientAsync()
+    {
+        _addError = null;
+
+        if (string.IsNullOrWhiteSpace(_newFirstName) || string.IsNullOrWhiteSpace(_newLastName))
+        {
+            _addError = "First name and last name are required.";
+            return;
+        }
+
+        _addingClient = true;
+        StateHasChanged();
+
+        try
+        {
+            var req = new CreateClientRequest(
+                _newFirstName.Trim(),
+                _newLastName.Trim(),
+                string.IsNullOrWhiteSpace(_newEmail) ? null : _newEmail.Trim(),
+                string.IsNullOrWhiteSpace(_newPhone) ? null : _newPhone.Trim(),
+                null);
+
+            var created = await ClientService.CreateClientAsync(req);
+            if (created != null)
+            {
+                CloseModal();
+                _page = 1;
+                await LoadClientsAsync();
+            }
+            else
+            {
+                _addError = "Failed to add client. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _addError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _addingClient = false;
+            StateHasChanged();
+        }
     }
 }

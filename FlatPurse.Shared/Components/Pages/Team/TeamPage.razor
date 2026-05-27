@@ -1,4 +1,5 @@
 @page "/team"
+@layout MainLayout
 @using FlatPurse.Models
 @using FlatPurse.Components.Shared
 @inject FlatPurse.Services.IAppStateService AppState
@@ -45,8 +46,9 @@ else
                     {
                         @foreach (var m in _staff)
                         {
-                            var initials = $"{m.FirstName[..1]}{m.LastName[..1]}".ToUpper();
-                            var color = m.Colour ?? _avatarColors[Math.Abs(m.FirstName.GetHashCode()) % _avatarColors.Length];
+                            var _fn = m.FirstName ?? ""; var _ln = m.LastName ?? "";
+                            var initials = $"{(_fn.Length > 0 ? _fn[..1] : "")}{(_ln.Length > 0 ? _ln[..1] : "")}".ToUpper();
+                            var color = m.Colour ?? _avatarColors[Math.Abs(_fn.GetHashCode()) % _avatarColors.Length];
                             var perf = _performances.FirstOrDefault(p => p.StaffId == m.Id);
                             <tr>
                                 <td>

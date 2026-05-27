@@ -1,0 +1,172 @@
+@page "/staff/new"
+@layout MainLayout
+@using FlatPurse.Models
+@using FlatPurse.Components.Shared
+@inject FlatPurse.Services.IStaffService StaffService
+@inject FlatPurse.Services.IServiceCatalogService ServiceCatalogService
+@inject FlatPurse.Services.IAppStateService AppState
+@inject NavigationManager Nav
+
+<div class="page-header">
+    <div>
+        <button class="btn-back" @onclick="@(() => Nav.NavigateTo("/team"))">&#8592; Team</button>
+        <h1 class="page-title">Add Staff Member</h1>
+    </div>
+</div>
+
+@if (_loadingServices)
+{
+    <LoadingSpinner />
+}
+else
+{
+    <div class="form-card">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="alert alert-error">@_error</div>
+        }
+        @if (!string.IsNullOrEmpty(_success))
+        {
+            <div class="alert alert-success">@_success</div>
+        }
+
+        <div class="form-section">
+            <h3>Personal Information</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">First Name *</label>
+                    <input class="form-control" type="text" @bind="_firstName" placeholder="First name" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Last Name *</label>
+                    <input class="form-control" type="text" @bind="_lastName" placeholder="Last name" />
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input class="form-control" type="email" @bind="_email" placeholder="staff@email.com" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Phone</label>
+                    <input class="form-control" type="tel" @bind="_phone" placeholder="+1 (555) 000-0000" />
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h3>Role</h3>
+            <div class="form-group">
+                <InputSelect class="form-control" @bind-Value="_role">
+                    @foreach (var role in Enum.GetValues<StaffRole>())
+                    {
+                        <option value="@role">@role</option>
+                    }
+                </InputSelect>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h3>Assigned Services</h3>
+            <p class="settings-desc">Select which services this staff member can perform.</p>
+            @if (_services.Any())
+            {
+                <div class="toggle-list">
+                    @foreach (var svc in _services)
+                    {
+                        <div class="toggle-item">
+                            <span>@svc.Name <span style="color:var(--text-3);font-size:12px">($@svc.Price · @svc.DurationMins min)</span></span>
+                            <input type="checkbox" checked="@_selectedServiceIds.Contains(svc.Id)"
+                                   @onchange="(e) => ToggleService(svc.Id, (bool)(e.Value ?? false))" />
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <p style="color:var(--text-3);font-size:13px">No services configured yet. <a href="/services" style="color:var(--purple)">Add services first</a></p>
+            }
+        </div>
+
+        <div class="form-actions" style="display:flex;gap:12px;padding-top:8px">
+            <button class="btn btn-primary" @onclick="CreateStaffAsync" disabled="@_submitting">
+                @(_submitting ? "Adding..." : "Add Staff Member")
+            </button>
+            <button class="btn btn-secondary" @onclick="@(() => Nav.NavigateTo("/team"))">Cancel</button>
+        </div>
+    </div>
+}
+
+@code {
+    private string _firstName = string.Empty;
+    private string _lastName = string.Empty;
+    private string? _email;
+    private string? _phone;
+    private StaffRole _role = StaffRole.Stylist;
+    private HashSet<Guid> _selectedServiceIds = new();
+    private List<ServiceDto> _services = new();
+    private bool _loadingServices = true;
+    private bool _submitting;
+    private string? _error;
+    private string? _success;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AppState.IsAuthenticated) { Nav.NavigateTo("/login"); return; }
+
+        var services = await ServiceCatalogService.GetAllAsync();
+        _services = services?.ToList() ?? new();
+        _loadingServices = false;
+    }
+
+    private void ToggleService(Guid id, bool isChecked)
+    {
+        if (isChecked) _selectedServiceIds.Add(id);
+        else _selectedServiceIds.Remove(id);
+    }
+
+    private async Task CreateStaffAsync()
+    {
+        _error = null;
+        _success = null;
+
+        if (string.IsNullOrWhiteSpace(_firstName) || string.IsNullOrWhiteSpace(_lastName))
+        {
+            _error = "First name and last name are required.";
+            return;
+        }
+
+        _submitting = true;
+        StateHasChanged();
+
+        try
+        {
+            var req = new CreateStaffRequest(
+                _firstName.Trim(),
+                _lastName.Trim(),
+                string.IsNullOrWhiteSpace(_email) ? null : _email.Trim(),
+                string.IsNullOrWhiteSpace(_phone) ? null : _phone.Trim(),
+                _role,
+                _selectedServiceIds.Any() ? _selectedServiceIds.ToList() : null);
+
+            var created = await StaffService.CreateAsync(req);
+            if (created != null)
+            {
+                Nav.NavigateTo("/team");
+            }
+            else
+            {
+                _error = "Failed to add staff member. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _submitting = false;
+            StateHasChanged();
+        }
+    }
+}

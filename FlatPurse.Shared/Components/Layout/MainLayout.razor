@@ -41,7 +41,7 @@ else
                     </button>
                     <a href="/bookings/new" class="new-booking-btn">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                        New Booking
+                        <span>New Booking</span>
                     </a>
                 </div>
             </div>
@@ -89,12 +89,17 @@ else
         if (firstRender)
         {
             var saved = await JS.InvokeAsync<string>("localStorage.getItem", "theme");
-            if (saved == "dark")
+            // Default to dark if no preference saved
+            if (saved == "light")
+            {
+                _isDark = false;
+            }
+            else
             {
                 _isDark = true;
                 await JS.InvokeVoidAsync("document.documentElement.setAttribute", "data-theme", "dark");
-                StateHasChanged();
             }
+            StateHasChanged();
         }
     }
 
@@ -123,8 +128,11 @@ else
             var u when u.Contains("/autopilot") => "AutoPilot",
             var u when u.Contains("/operations") => "Operations",
             var u when u.Contains("/reports") => "Reports",
+            var u when u.Contains("/staff") => "Team",
             var u when u.Contains("/team") => "Team",
+            var u when u.Contains("/services") => "Services",
             var u when u.Contains("/settings") => "Settings",
+            var u when u.Contains("/barber") => "Barber Mode",
             _ => "Dashboard"
         };
     }

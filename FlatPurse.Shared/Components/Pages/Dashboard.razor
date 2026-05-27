@@ -1,5 +1,6 @@
 @page "/"
 @page "/dashboard"
+@layout MainLayout
 @using FlatPurse.Models
 @inject FlatPurse.Services.IAppStateService AppState
 @inject FlatPurse.Services.IDashboardService DashboardService
@@ -15,35 +16,67 @@
 
 @if (_loading)
 {
-    <div class="stat-row">
-        <div class="stat-card"><div class="stat-label">Loading...</div></div>
-    </div>
+    <LoadingSpinner />
 }
 else
 {
+    <!-- Mobile greeting (visible <= 768px) -->
+    <div class="mobile-greeting">
+        <div class="greeting-left">
+            <h1 class="greeting-title">Good morning, @(AppState.CurrentUser?.FirstName ?? "there") <span class="greeting-wave">👋</span></h1>
+            <p class="greeting-sub">@DateTime.Today.ToString("dddd") · @(_brief?.UpcomingBookings?.Count ?? 0) bookings before noon</p>
+        </div>
+        @if (AppState.CurrentUser != null)
+        {
+            var fn = AppState.CurrentUser.FirstName ?? "";
+            var ln = AppState.CurrentUser.LastName ?? "";
+            var initials = $"{(fn.Length > 0 ? fn[..1] : "")}{(ln.Length > 0 ? ln[..1] : "")}".ToUpper();
+            <div class="greeting-avatar" style="background:var(--green)">@(initials.Length > 0 ? initials : "U")</div>
+        }
+    </div>
+
+    <!-- Mobile AutoPilot recovered banner -->
+    @if ((_apStats?.TotalRevenueRecovered ?? 0) > 0)
+    {
+        <div class="mobile-ap-banner">
+            <div class="mobile-ap-banner-label">AUTOPILOT RECOVERED TODAY</div>
+            <div class="mobile-ap-banner-value">C$@(_apStats!.TotalRevenueRecovered.ToString("N0"))</div>
+            <div class="mobile-ap-banner-sub">@(_apStats.WinbacksTriggered) win-backs sent · @(_apStats.SlotsFilled) slot filled · @(_apStats.NoShowsRecovered) upsells</div>
+        </div>
+    }
+
+    <!-- Stat cards row -->
     <div class="stat-row">
-        <div class="stat-card">
+        <div class="stat-card accent-green">
             <div class="stat-label">Revenue Today</div>
-            <div class="stat-value">$@(_brief?.RevenueTodayProjected.ToString("N0") ?? "0")</div>
+            <div class="stat-value">C$@(_brief?.RevenueTodayProjected.ToString("N0") ?? "0")</div>
         </div>
-        <div class="stat-card">
-            <div class="stat-label">Appointments</div>
+        <div class="stat-card accent-purple">
+            <div class="stat-label">Bookings</div>
             <div class="stat-value">@(_brief?.AppointmentsToday ?? 0)</div>
-            <div class="stat-delta positive">@(_brief?.UpcomingBookings?.Count ?? 0) upcoming</div>
+            <div class="stat-delta positive">+@(_brief?.UpcomingBookings?.Count ?? 0) vs forecast</div>
         </div>
-        <div class="stat-card">
-            <div class="stat-label">AutoPilot Saves</div>
-            <div class="stat-value">$@(_apStats?.TotalRevenueRecovered.ToString("N0") ?? "0")</div>
-            <div class="stat-delta positive">@(_apStats?.NoShowsRecovered ?? 0) no-shows recovered</div>
+        <div class="stat-card accent-amber">
+            <div class="stat-label">No-Show Risk</div>
+            <div class="stat-value">@(_brief?.Alerts?.Count ?? 0)</div>
+            @if ((_brief?.Alerts?.Count ?? 0) > 0)
+            {
+                <div class="stat-delta warning"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg> Deposits req'd</div>
+            }
         </div>
-        <div class="stat-card">
-            <div class="stat-label">Slots Filled</div>
-            <div class="stat-value">@(_apStats?.SlotsFilled ?? 0)</div>
-            <div class="stat-delta positive">@(_apStats?.MessagesSent ?? 0) messages sent</div>
+        <div class="stat-card accent-blue">
+            <div class="stat-label">Win-Back Wins</div>
+            <div class="stat-value">@(_apStats?.WinbacksTriggered ?? 0)</div>
+            @if ((_apStats?.TotalRevenueRecovered ?? 0) > 0)
+            {
+                <div class="stat-delta positive">+C$@(_apStats!.TotalRevenueRecovered.ToString("N0")) recovered</div>
+            }
         </div>
     </div>
 
+    <!-- Main two-column grid -->
     <div class="main-grid">
+        <!-- Left column: Schedule + AI -->
         <div>
             <div class="card">
                 <div class="card-header">
@@ -51,19 +84,27 @@ else
                     <span class="card-badge badge-purple">@(_brief?.UpcomingBookings?.Count ?? 0) UPCOMING</span>
                 </div>
                 <div class="schedule-list">
-                    @if (_brief?.UpcomingBookings != null)
+                    @if (_brief?.UpcomingBookings != null && _brief.UpcomingBookings.Any())
                     {
                         @foreach (var appt in _brief.UpcomingBookings)
                         {
-                            var initials = $"{appt.ClientName.Split(' ').FirstOrDefault()?[..1]}{appt.ClientName.Split(' ').LastOrDefault()?[..1]}".ToUpper();
+                            var parts = (appt.ClientName ?? "?").Split(' ', 2);
+                            var initials = $"{(parts[0].Length > 0 ? parts[0][..1] : "?")}{(parts.Length > 1 && parts[1].Length > 0 ? parts[1][..1] : "")}".ToUpper();
                             var color = _avatarColors[Math.Abs(appt.ClientName.GetHashCode()) % _avatarColors.Length];
+                            var statusLabel = appt.Status switch
+                            {
+                                BookingStatus.Completed => "Done",
+                                BookingStatus.InProgress => "Up next",
+                                BookingStatus.Confirmed => "Confirmed",
+                                BookingStatus.Cancelled => "Cancelled",
+                                BookingStatus.NoShow => "No-show",
+                                _ => "Pending"
+                            };
                             var statusClass = appt.Status switch
                             {
                                 BookingStatus.Completed => "done",
                                 BookingStatus.InProgress => "next",
-                                BookingStatus.Confirmed => "confirmed",
-                                BookingStatus.Cancelled => "risk",
-                                BookingStatus.NoShow => "risk",
+                                BookingStatus.Cancelled or BookingStatus.NoShow => "risk",
                                 _ => "confirmed"
                             };
                             <div class="schedule-item">
@@ -71,16 +112,18 @@ else
                                 <div class="appt-avatar" style="background:@color">@initials</div>
                                 <div class="appt-info">
                                     <div class="appt-name">@appt.ClientName</div>
-                                    <div class="appt-service">@appt.ServiceName · @appt.StaffName</div>
+                                    <div class="appt-service">@appt.ServiceName</div>
                                 </div>
-                                <span class="appt-price">$@appt.Price</span>
-                                <span class="appt-status status-@statusClass">@appt.Status</span>
+                                <span class="appt-status status-@statusClass">@statusLabel</span>
                             </div>
                         }
                     }
                     else
                     {
-                        <div style="padding:20px;text-align:center;color:var(--text-3)">No appointments today</div>
+                        <div class="empty-state" style="padding:32px 20px">
+                            <div class="empty-state-icon">📅</div>
+                            <div>No appointments today</div>
+                        </div>
                     }
                 </div>
             </div>
@@ -90,7 +133,7 @@ else
                 <div class="card" style="margin-top:14px">
                     <div class="card-header">
                         <span class="card-title">AI Recommendations</span>
-                        <span class="card-badge badge-purple">AI POWERED</span>
+                        <span class="card-badge badge-green">LIVE</span>
                     </div>
                     <div class="ai-list">
                         @if (_brief.AutoPilotHighlights != null)
@@ -98,8 +141,9 @@ else
                             @foreach (var highlight in _brief.AutoPilotHighlights)
                             {
                                 <div class="ai-card">
-                                    <div class="ai-type slot">● AUTOPILOT</div>
+                                    <div class="ai-type slot">WIN-BACK</div>
                                     <div class="ai-card-body">@highlight</div>
+                                    <button class="ai-btn">Send all</button>
                                 </div>
                             }
                         }
@@ -108,7 +152,7 @@ else
                             @foreach (var alert in _brief.Alerts)
                             {
                                 <div class="ai-card">
-                                    <div class="ai-type winback">● ALERT</div>
+                                    <div class="ai-type winback">ALERT</div>
                                     <div class="ai-card-body">@alert</div>
                                 </div>
                             }
@@ -118,6 +162,7 @@ else
             }
         </div>
 
+        <!-- Right column: Quick stats + Team + AutoPilot -->
         <div class="right-col">
             <div class="quick-stats">
                 <div class="qs-cell">
@@ -145,13 +190,15 @@ else
             <div class="card">
                 <div class="card-header">
                     <span class="card-title">Team Today</span>
-                    <span class="card-badge badge-green">@(_staff?.Count() ?? 0) ACTIVE</span>
+                    <span class="card-badge badge-green">@(_staff?.Count(s => s.IsActive) ?? 0) ACTIVE</span>
                 </div>
-                @if (_staff != null)
+                @if (_staff != null && _staff.Any(s => s.IsActive))
                 {
                     @foreach (var m in _staff.Where(s => s.IsActive))
                     {
-                        var initials = $"{m.FirstName[..1]}{m.LastName[..1]}".ToUpper();
+                        var mfn = m.FirstName ?? "";
+                        var mln = m.LastName ?? "";
+                        var initials = $"{(mfn.Length > 0 ? mfn[..1] : "")}{(mln.Length > 0 ? mln[..1] : "")}".ToUpper();
                         var color = m.Colour ?? _avatarColors[Math.Abs(m.FirstName.GetHashCode()) % _avatarColors.Length];
                         <div class="team-item">
                             <div class="team-avatar" style="background:@color">@initials</div>
@@ -161,6 +208,10 @@ else
                             </div>
                         </div>
                     }
+                }
+                else
+                {
+                    <div class="empty-state" style="padding:20px">No team members yet</div>
                 }
             </div>
 

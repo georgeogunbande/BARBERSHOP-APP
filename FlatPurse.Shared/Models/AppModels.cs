@@ -56,7 +56,50 @@ public enum AiConversationStatus { Active, HandedOff, Resolved }
 public record RegisterRequest(string FirstName, string LastName, string Email, string Password, string BusinessName, string? City, string? BusinessType);
 public record LoginRequest(string Email, string Password);
 
-public record AuthResponse(string AccessToken, UserDto User);
+// API response from POST /auth/login and /auth/exchange
+public record TokenExchangeResponse(
+    string AccessToken,
+    string TokenType,
+    DateTime ExpiresAtUtc,
+    string AccountId,
+    string? Email,
+    string? FirstName,
+    string? LastName,
+    string? OrganizationId,
+    string? BusinessName,
+    string? BusinessType,
+    string? ExternalAccessToken,
+    bool Success = true,
+    string? ErrorMessage = null,
+    string? RefreshToken = null);
+
+// API response from GET /auth/me
+public record MeResponse(
+    string AccountId,
+    string? Email,
+    string? FirstName,
+    string? LastName,
+    string? OrganizationId,
+    string? BusinessName,
+    string? BusinessType,
+    MeBusinessProfile? BusinessProfile);
+
+public record MeBusinessProfile(
+    Guid Id,
+    string? ExternalAccountId,
+    string? ExternalOrganizationId,
+    string? BusinessName,
+    string? BusinessType,
+    string? PhoneNumber,
+    string? BookingPageHandle,
+    string? LogoUrl,
+    string? CoverPhotoUrl,
+    string? City,
+    string? Address,
+    string? Currency,
+    string? ActiveTheme);
+
+// Internal app user model
 public record UserDto(string Id, string FirstName, string LastName, string Email, string? Phone, string? AvatarUrl, StaffRole Role, Guid? BusinessId, BusinessSummaryDto? Business);
 public record BusinessSummaryDto(Guid Id, string Name, string? City, string? Type, string? LogoUrl, string? BookingHandle, SubscriptionPlan Plan);
 
