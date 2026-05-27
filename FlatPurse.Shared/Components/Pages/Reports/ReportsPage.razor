@@ -1,71 +1,162 @@
 @page "/reports"
+@using System.Text.Json
+@using FlatPurse.Models
+@using FlatPurse.Components.Shared
 @inject FlatPurse.Services.IAppStateService AppState
+@inject FlatPurse.Services.IBookingService BookingService
+@inject FlatPurse.Services.IAutoPilotService AutoPilotService
+@inject FlatPurse.Services.IClientService ClientService
 @inject NavigationManager Nav
 
-<div class="stat-row">
-    <div class="stat-card">
-        <div class="stat-label">Month Revenue</div>
-        <div class="stat-value">$18,450</div>
-        <div class="stat-delta positive">↑ 22% vs last month</div>
+@if (_loading)
+{
+    <LoadingSpinner />
+}
+else
+{
+    <div class="stat-row">
+        <div class="stat-card">
+            <div class="stat-label">Month Revenue</div>
+            <div class="stat-value">$@_monthRevenue.ToString("N0")</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Total Clients</div>
+            <div class="stat-value">@_totalClients</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Appointments</div>
+            <div class="stat-value">@_monthBookings</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">AutoPilot Revenue</div>
+            <div class="stat-value">$@(_apStats?.TotalRevenueRecovered.ToString("N0") ?? "0")</div>
+            <div class="stat-delta positive">@(_apStats?.SlotsFilled ?? 0) slots filled</div>
+        </div>
     </div>
-    <div class="stat-card">
-        <div class="stat-label">Total Clients</div>
-        <div class="stat-value">248</div>
-        <div class="stat-delta positive">+14 new this month</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-label">Appointments</div>
-        <div class="stat-value">142</div>
-        <div class="stat-delta positive">↑ 18% vs last month</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-label">Avg Rating</div>
-        <div class="stat-value">4.9★</div>
-        <div class="stat-delta positive">32 new reviews</div>
-    </div>
-</div>
 
-<div class="card">
-    <div class="card-header">
-        <span class="card-title">Revenue Trend (Last 8 Weeks)</span>
-        <span class="card-badge badge-purple">MONTHLY</span>
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Weekly Breakdown</span>
+            <span class="card-badge badge-purple">LAST 4 WEEKS</span>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Period</th><th>Revenue</th><th>Appointments</th><th>Completed</th></tr></thead>
+                <tbody>
+                    @foreach (var week in _weeklyData)
+                    {
+                        <tr>
+                            <td>@week.Label</td>
+                            <td style="font-family:var(--mono);font-weight:700">$@week.Revenue.ToString("N0")</td>
+                            <td>@week.Total</td>
+                            <td style="color:var(--green)">@week.Completed</td>
+                        </tr>
+                    }
+                    @if (!_weeklyData.Any())
+                    {
+                        <tr><td colspan="4" style="text-align:center;color:var(--text-3)">No data available</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
     </div>
-    <div class="table-wrap">
-        <table>
-            <thead><tr><th>Period</th><th>Revenue</th><th>Appointments</th><th>New Clients</th><th>AutoPilot Revenue</th></tr></thead>
-            <tbody>
-                @foreach (var row in _trend)
-                {
-                    <tr>
-                        <td>@row.Label</td>
-                        <td style="font-family:var(--mono);font-weight:700">$@row.Revenue.ToString("N0")</td>
-                        <td>@row.Apts</td>
-                        <td style="color:var(--green)">+@row.NewClients</td>
-                        <td style="color:var(--purple);font-weight:700">$@row.AutoPilotRev.ToString("N0")</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+
+    <div class="main-grid" style="margin-top:14px">
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">AutoPilot Summary</span>
+                <span class="card-badge badge-green">ACTIVE</span>
+            </div>
+            <div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;justify-content:space-between;font-size:13px">
+                    <span style="color:var(--text-3)">Messages sent</span>
+                    <span style="font-weight:700">@(_apStats?.MessagesSent ?? 0)</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:13px">
+                    <span style="color:var(--text-3)">Winbacks triggered</span>
+                    <span style="font-weight:700">@(_apStats?.WinbacksTriggered ?? 0)</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:13px">
+                    <span style="color:var(--text-3)">No-shows recovered</span>
+                    <span style="font-weight:700;color:var(--green)">@(_apStats?.NoShowsRecovered ?? 0)</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:13px">
+                    <span style="color:var(--text-3)">Reviews requested</span>
+                    <span style="font-weight:700">@(_apStats?.ReviewsRequested ?? 0)</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:13px;padding-top:8px;border-top:1px solid var(--border-2)">
+                    <span style="font-weight:700">Revenue recovered</span>
+                    <span style="font-weight:800;color:var(--purple)">$@(_apStats?.TotalRevenueRecovered.ToString("N0") ?? "0")</span>
+                </div>
+            </div>
+        </div>
     </div>
-</div>
+}
 
 @code {
-    private record RevenueRow(string Label, decimal Revenue, int Apts, int NewClients, decimal AutoPilotRev);
+    private bool _loading = true;
+    private decimal _monthRevenue;
+    private int _totalClients;
+    private int _monthBookings;
+    private AutoPilotStatsDto? _apStats;
+    private List<WeekData> _weeklyData = new();
 
-    private readonly List<RevenueRow> _trend = new()
-    {
-        new("Week Apr 7",  3840, 28, 2, 280),
-        new("Week Apr 14", 4120, 31, 3, 340),
-        new("Week Apr 21", 3980, 29, 1, 310),
-        new("Week Apr 28", 4510, 34, 4, 420),
-        new("Week May 5",  4890, 36, 3, 460),
-        new("Week May 12", 5240, 38, 5, 510),
-        new("Week May 19", 5120, 37, 4, 490),
-        new("Week May 22", 1085, 8,  1, 340),
-    };
+    private record WeekData(string Label, decimal Revenue, int Total, int Completed);
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        if (!AppState.IsAuthenticated) Nav.NavigateTo("/login");
+        if (!AppState.IsAuthenticated) { Nav.NavigateTo("/login"); return; }
+
+        var monthStart = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+        var monthEnd = monthStart.AddMonths(1);
+
+        var bookingsTask = BookingService.GetBookingsAsync(from: monthStart, to: monthEnd, limit: 500);
+        var clientsTask = ClientService.GetClientsAsync(page: 1, limit: 1);
+        var apTask = AutoPilotService.GetStatsAsync();
+
+        await Task.WhenAll(bookingsTask, clientsTask, apTask).ConfigureAwait(false);
+
+        _apStats = apTask.Result;
+        _totalClients = clientsTask.Result?.Total ?? 0;
+
+        var bookingsResult = bookingsTask.Result;
+        var allBookings = new List<BookingDto>();
+        if (bookingsResult != null)
+        {
+            var json = JsonSerializer.Serialize(bookingsResult);
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("items", out var items))
+            {
+                allBookings = JsonSerializer.Deserialize<List<BookingDto>>(items.GetRawText(),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+            }
+            if (doc.RootElement.TryGetProperty("total", out var total))
+                _monthBookings = total.GetInt32();
+        }
+
+        _monthRevenue = allBookings
+            .Where(b => b.Status == BookingStatus.Completed)
+            .Sum(b => b.Price);
+
+        var weeks = allBookings
+            .GroupBy(b =>
+            {
+                var diff = (b.StartsAt.Date - monthStart).Days;
+                return diff / 7;
+            })
+            .OrderBy(g => g.Key)
+            .Select(g =>
+            {
+                var weekStart = monthStart.AddDays(g.Key * 7);
+                return new WeekData(
+                    $"Week of {weekStart:MMM d}",
+                    g.Where(b => b.Status == BookingStatus.Completed).Sum(b => b.Price),
+                    g.Count(),
+                    g.Count(b => b.Status == BookingStatus.Completed));
+            })
+            .ToList();
+
+        _weeklyData = weeks;
+        _loading = false;
     }
 }

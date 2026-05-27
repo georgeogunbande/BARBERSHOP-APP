@@ -124,10 +124,22 @@ public record ChannelDto(Guid Id, ChannelType Type, ChannelStatus Status, string
 
 public record DailyBriefDto(DateTime Date, int AppointmentsToday, decimal RevenueTodayProjected, List<BookingDto> UpcomingBookings, List<string> AutoPilotHighlights, List<string> Alerts);
 
+// ── Staff Management ─────────────────────────────────────────────────────────
+
+public record CreateStaffRequest(string FirstName, string LastName, string? Email, string? Phone, StaffRole Role, List<Guid>? ServiceIds);
+public record UpdateStaffRequest(string? FirstName, string? LastName, string? Email, string? Phone, string? Colour, StaffRole? Role, bool? IsActive, List<Guid>? ServiceIds);
+public record StaffPerformanceDto(Guid StaffId, string StaffName, decimal Revenue, int Appointments, int TotalSlots, decimal UtilizationPct, decimal RebookRatePct, decimal NoShowRatePct, string Month);
+
+// ── Service Catalog ──────────────────────────────────────────────────────────
+
+public record CreateServiceRequest(string Name, decimal Price, int DurationMins, string? Category, decimal DepositPct);
+public record UpdateServiceRequest(string? Name, decimal? Price, int? DurationMins, string? Category, bool? Active, decimal? DepositPct);
+
 // ── Settings ─────────────────────────────────────────────────────────────────
 
 public record BusinessSettingsDto(BusinessDto Business, BookingSettingsDto Booking, DepositSettingsDto Deposit, NotificationSettingsDto Notifications);
 public record BookingSettingsDto(int MinAdvanceNoticeHours, int MaxAdvanceDays, bool AllowPublicBooking, bool RequireDeposit);
 public record DepositSettingsDto(decimal DefaultDepositPct);
 public record NotificationSettingsDto(bool BookingConfirmations, bool BookingReminders, bool PaymentReceipts, bool AutoPilotAlerts);
+public record UpdateBusinessProfileRequest(string? Name, string? City, string? Type, string? BookingHandle, string? ActiveTheme, string? Currency);
 public record SubscriptionDto(SubscriptionPlan Plan, bool IsTrialing, DateTime? TrialEndsAt, DateTime? CurrentPeriodEnd, bool IsActive);

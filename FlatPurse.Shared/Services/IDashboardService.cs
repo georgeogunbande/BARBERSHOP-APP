@@ -1,6 +1,8 @@
+using FlatPurse.Models;
+
 namespace FlatPurse.Services;
 
 public interface IDashboardService
 {
-    Task<object?> GetTodayBriefAsync();
+    Task<DailyBriefDto?> GetTodayBriefAsync();
 }

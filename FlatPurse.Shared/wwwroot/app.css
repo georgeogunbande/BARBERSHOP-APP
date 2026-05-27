@@ -746,15 +746,58 @@ tr:hover td { background: var(--surface-2); }
 
 /* ── Responsive ── */
 @media (max-width: 768px) {
-  .stat-row { grid-template-columns: repeat(2, 1fr); }
+  .stat-row { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .main-grid { grid-template-columns: 1fr; }
   .sidebar { display: none; }
-  .content { padding: 16px 14px 80px; }
+  .content { padding: 16px 14px 88px; }
   .topbar { padding: 12px 16px; }
   .topbar-left h1 { font-size: 16px; }
   .topbar-left .sub { display: none; }
   .topbar-right .autopilot-badge { display: none; }
+  .topbar-right .new-booking-btn span { display: none; }
   .trust-bar { display: none; }
+  .stat-value { font-size: 22px; }
+  .stat-label { font-size: 9px; letter-spacing: 1px; }
+  .stat-card { padding: 14px 16px; }
+  .card-header { padding: 14px 16px; }
+  .card-title { font-size: 14px; }
+  .schedule-item { padding: 10px 14px; gap: 10px; }
+  .appt-time { font-size: 12px; width: 38px; }
+  .appt-avatar { width: 30px; height: 30px; font-size: 10px; }
+  .appt-name { font-size: 13px; }
+  .appt-price { font-size: 13px; }
+  .page-title { font-size: 20px; }
+  .right-col { gap: 10px; }
+  .quick-stats { gap: 1px; }
+  .qs-cell { padding: 12px 14px; }
+  .qs-value { font-size: 18px; }
+  .team-item { padding: 10px 14px; gap: 10px; }
+  .ai-list { padding: 8px 10px; }
+  .ai-card { padding: 12px; }
+  .ai-card-body { font-size: 12px; }
+  .ai-btn { padding: 7px 12px; font-size: 11px; }
+  th { padding: 8px 12px; font-size: 10px; }
+  td { padding: 10px 12px; font-size: 12px; }
+  .filters-bar { gap: 8px; }
+  .search-input { min-width: 0; flex: 1; }
+  .settings-section { padding: 18px 16px; }
+  .detail-grid { grid-template-columns: 1fr; gap: 10px; }
+  .plan-options { grid-template-columns: 1fr; gap: 8px; }
+  .toggle-item { padding: 12px 0; font-size: 13px; }
+  .channel-card { padding: 12px; }
+  .checkout-layout { grid-template-columns: 1fr; }
+  .form-row { grid-template-columns: 1fr; }
+  .auth-card { padding: 28px 20px; margin: 16px; }
+  .auth-title { font-size: 20px; }
+  .summary-bar { flex-direction: column; gap: 10px; }
+  .summary-item { padding: 12px 14px; }
+  .summary-value { font-size: 18px; }
+  .flow-card { padding: 14px 16px; }
+  .flow-name { font-size: 14px; }
+  .flow-meta { flex-direction: column; gap: 4px; }
+  .event-row { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+  .event-flow { min-width: 0; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
 }
 
 /* ── Mobile bottom navigation ── */
@@ -2212,5 +2255,300 @@ textarea.form-control { resize: vertical; min-height: 100px; }
   .sw-card { max-width: 520px; gap: 22px; }
   .sw-card-title { font-size: 28px; }
   .sw-hero-title { font-size: 44px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DARK MODE — extended overrides
+   ═══════════════════════════════════════════════════════════════ */
+[data-theme="dark"] {
+  --green-text:   #4ADE80;
+  --amber-text:   #FBBF24;
+  --blue-soft:    rgba(2,132,199,0.15);
+  --pink-soft:    rgba(217,48,128,0.15);
+}
+
+/* Borders that use hardcoded light-mode colors */
+[data-theme="dark"] .autopilot-badge          { border-color: rgba(22,163,74,0.3); }
+[data-theme="dark"] .badge-green              { border-color: rgba(22,163,74,0.3); }
+[data-theme="dark"] .alert-success            { border-color: rgba(22,163,74,0.3); }
+[data-theme="dark"] .alert-error              { border-color: rgba(220,38,38,0.3); }
+[data-theme="dark"] .alert-warning            { border-color: rgba(217,119,6,0.3); }
+
+/* Form elements */
+[data-theme="dark"] .form-input,
+[data-theme="dark"] .form-select,
+[data-theme="dark"] .form-textarea,
+[data-theme="dark"] .form-control,
+[data-theme="dark"] .filter-input,
+[data-theme="dark"] .search-input,
+[data-theme="dark"] .filter-select {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text);
+}
+[data-theme="dark"] .form-input::placeholder,
+[data-theme="dark"] .form-control::placeholder,
+[data-theme="dark"] .filter-input::placeholder,
+[data-theme="dark"] .search-input::placeholder {
+  color: var(--text-3);
+}
+
+/* Checkbox / toggle appearance */
+[data-theme="dark"] input[type="checkbox"] {
+  accent-color: var(--purple);
+}
+
+/* Table hover */
+[data-theme="dark"] tr:hover td {
+  background: var(--surface-2);
+}
+
+/* Plan cards in dark mode */
+[data-theme="dark"] .plan-card {
+  background: rgba(83,74,183,0.12);
+  border-color: rgba(83,74,183,0.3);
+}
+[data-theme="dark"] .plan-option {
+  border-color: var(--border);
+  background: var(--surface);
+}
+[data-theme="dark"] .plan-option.current {
+  border-color: var(--purple);
+  background: rgba(83,74,183,0.12);
+}
+
+/* Channel cards */
+[data-theme="dark"] .channel-card {
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+[data-theme="dark"] .channel-status.status-disconnected {
+  background: var(--surface);
+  color: var(--text-3);
+}
+
+/* Tab bar underline */
+[data-theme="dark"] .tab-btn {
+  color: var(--text-3);
+}
+[data-theme="dark"] .tab-btn:hover {
+  color: var(--text-2);
+}
+[data-theme="dark"] .tab-btn.active {
+  color: var(--purple-mid);
+  border-bottom-color: var(--purple-mid);
+}
+
+/* Settings sections */
+[data-theme="dark"] .settings-section {
+  border-color: var(--border);
+}
+[data-theme="dark"] .settings-desc {
+  color: var(--text-3);
+}
+
+/* Card badges in dark */
+[data-theme="dark"] .card-badge {
+  opacity: 0.9;
+}
+
+/* Search dropdown */
+[data-theme="dark"] .search-dropdown {
+  background: var(--surface);
+  border-color: var(--border);
+}
+[data-theme="dark"] .search-dropdown li:hover {
+  background: var(--surface-2);
+}
+
+/* Success card */
+[data-theme="dark"] .success-card {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+/* Modal / dialog */
+[data-theme="dark"] .modal-overlay {
+  background: rgba(0,0,0,0.65);
+}
+[data-theme="dark"] .modal-content {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+/* Auth card */
+[data-theme="dark"] .auth-card {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+/* Barber mode dark */
+[data-theme="dark"] .barber-queue-card {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+/* Utilization bar dark */
+[data-theme="dark"] .util-bar {
+  background: var(--surface-2);
+}
+
+/* Mobile bottom nav dark */
+[data-theme="dark"] .mobile-bottom-nav {
+  background: var(--surface);
+  border-top-color: var(--border);
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.35);
+}
+
+/* Scroll bars for dark mode */
+[data-theme="dark"] ::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--text-3);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VERY SMALL SCREENS — single-column stat cards, tighter spacing
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 380px) {
+  .stat-row { grid-template-columns: 1fr; gap: 8px; }
+  .stat-value { font-size: 20px; }
+  .stat-label { font-size: 8px; }
+  .stat-card { padding: 12px 14px; }
+
+  .topbar { padding: 10px 12px; gap: 8px; }
+  .topbar-left h1 { font-size: 14px; }
+  .content { padding: 12px 10px 88px; }
+
+  .card-header { padding: 12px 14px; }
+  .card-title { font-size: 13px; }
+
+  .page-title { font-size: 17px; }
+
+  .auth-card { padding: 24px 16px; margin: 12px; }
+  .auth-title { font-size: 18px; }
+
+  .btn, .btn-primary, .btn-outline {
+    font-size: 12px;
+    padding: 8px 14px;
+  }
+
+  .barber-time { font-size: 44px; letter-spacing: -1.5px; }
+  .barber-action-btn { height: 48px; font-size: 12px; }
+
+  .schedule-item { padding: 8px 10px; gap: 8px; }
+  .appt-time { font-size: 11px; width: 34px; }
+  .appt-name { font-size: 12px; }
+
+  .tab-bar { gap: 0; padding: 0 12px; overflow-x: auto; }
+  .tab-btn { padding: 8px 12px; font-size: 12px; white-space: nowrap; }
+
+  .detail-grid { gap: 8px; }
+  .detail-label { font-size: 10px; }
+
+  .flow-card { padding: 12px 14px; }
+  .flow-name { font-size: 13px; }
+
+  .success-card { padding: 32px 20px; }
+  .success-title { font-size: 22px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SAFE AREA — notch / home-indicator / rounded-corner devices
+   ═══════════════════════════════════════════════════════════════ */
+@supports (padding: env(safe-area-inset-top)) {
+  .topbar {
+    padding-top: calc(12px + env(safe-area-inset-top));
+  }
+  .content {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom));
+  }
+  .mobile-bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom);
+    height: calc(64px + env(safe-area-inset-bottom));
+  }
+  .barber-actions {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TOUCH TARGETS — min 44px tap area on interactive elements
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .btn, .btn-primary, .btn-outline, .btn-ghost,
+  .tab-btn, .mobile-nav-item, .nav-item,
+  .barber-action-btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .form-input, .form-select, .form-textarea,
+  .form-control, .filter-input, .search-input, .filter-select {
+    min-height: 44px;
+    font-size: 16px; /* prevents iOS auto-zoom on focus */
+  }
+
+  .toggle-item {
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+  }
+
+  /* Ensure table rows are tappable */
+  td { padding: 12px; }
+
+  /* Improve scroll overflow indication for tables */
+  .table-wrap {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  /* Horizontal scroll hint on tables that overflow */
+  .table-wrap::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 24px;
+    background: linear-gradient(to right, transparent, var(--surface));
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .table-wrap { position: relative; }
+
+  /* Channel / plan cards — touch-friendly spacing */
+  .channel-card { min-height: 56px; }
+  .plan-option { min-height: 56px; padding: 16px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LARGE SCREENS — max-width containment + better grid use
+   ═══════════════════════════════════════════════════════════════ */
+@media (min-width: 1280px) {
+  .content {
+    max-width: 1140px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .stat-row { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   REDUCED MOTION — respect user accessibility preferences
+   ═══════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 

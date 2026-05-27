@@ -1,96 +1,158 @@
 @page "/operations"
+@using FlatPurse.Models
+@using FlatPurse.Components.Shared
 @inject FlatPurse.Services.IAppStateService AppState
+@inject FlatPurse.Services.IStaffService StaffService
+@inject FlatPurse.Services.IAutoPilotService AutoPilotService
 @inject NavigationManager Nav
 
-<div class="stat-row">
-    <div class="stat-card">
-        <div class="stat-label">Ops Score</div>
-        <div class="stat-value">82</div>
-        <div class="stat-delta positive">↑ 5 pts this month</div>
+@if (_loading)
+{
+    <LoadingSpinner />
+}
+else
+{
+    <div class="stat-row">
+        <div class="stat-card">
+            <div class="stat-label">Team Revenue</div>
+            <div class="stat-value">$@_totalRev.ToString("N0")</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Utilization</div>
+            <div class="stat-value">@_avgUtil.ToString("N0")%</div>
+            <div class="stat-delta @(_avgUtil >= 80 ? "positive" : "warning")">@(_avgUtil >= 80 ? "On target" : "Target: 85%")</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Rebook Rate</div>
+            <div class="stat-value">@_avgRebook.ToString("N0")%</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">No-Show Rate</div>
+            <div class="stat-value">@_avgNoShow.ToString("N0")%</div>
+            <div class="stat-delta @(_avgNoShow <= 5 ? "positive" : "warning")">@(_avgNoShow <= 5 ? "Low" : "Needs attention")</div>
+        </div>
     </div>
-    <div class="stat-card">
-        <div class="stat-label">Utilization</div>
-        <div class="stat-value">74%</div>
-        <div class="stat-delta warning">⚠ Target: 85%</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-label">Rebook Rate</div>
-        <div class="stat-value">84%</div>
-        <div class="stat-delta positive">↑ 6% vs last month</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-label">Churn Rate</div>
-        <div class="stat-value">8%</div>
-        <div class="stat-delta positive">↓ 2% this month</div>
-    </div>
-</div>
 
-<div class="main-grid">
-    <div>
-        <div class="card">
-            <div class="card-header">
-                <span class="card-title">Staff Utilization</span>
-                <span class="card-badge badge-purple">THIS WEEK</span>
+    <div class="main-grid">
+        <div>
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Staff Utilization</span>
+                    <span class="card-badge badge-purple">THIS MONTH</span>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Staff</th><th>Booked</th><th>Utilization</th><th>Revenue</th><th>Rebook Rate</th></tr></thead>
+                        <tbody>
+                            @if (_staff != null)
+                            {
+                                @foreach (var m in _staff)
+                                {
+                                    var perf = _performances.FirstOrDefault(p => p.StaffId == m.Id);
+                                    <tr>
+                                        <td>@m.FirstName @m.LastName</td>
+                                        <td>@(perf?.Appointments ?? 0) / @(perf?.TotalSlots ?? 0)</td>
+                                        <td>@(perf?.UtilizationPct.ToString("N0") ?? "0")%</td>
+                                        <td>$@(perf?.Revenue.ToString("N0") ?? "0")</td>
+                                        <td>@(perf?.RebookRatePct.ToString("N0") ?? "0")%</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <div class="table-wrap">
-                <table>
-                    <thead><tr><th>Staff</th><th>Booked</th><th>Utilization</th><th>Revenue</th><th>Rebook Rate</th></tr></thead>
-                    <tbody>
-                        <tr><td>Emma Watson</td><td>6 / 8</td><td>88%</td><td>$1,420</td><td>92%</td></tr>
-                        <tr><td>James Miller</td><td>6 / 8</td><td>76%</td><td>$890</td><td>78%</td></tr>
-                        <tr><td>Zara Ahmed</td><td>5 / 8</td><td>62%</td><td>$537</td><td>85%</td></tr>
-                        <tr><td>Kevin Lee</td><td>4 / 8</td><td>45%</td><td>$320</td><td>70%</td></tr>
-                    </tbody>
-                </table>
+        </div>
+        <div class="right-col">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Revenue Mix</span>
+                </div>
+                <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+                    <div>
+                        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+                            <span>Services</span><span style="font-weight:700">$@_serviceRev.ToString("N0")</span>
+                        </div>
+                        <div class="util-bar" style="width:100%"><div class="util-fill" style="width:@_servicePct.ToString("N0")%"></div></div>
+                    </div>
+                    <div>
+                        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+                            <span>AutoPilot</span><span style="font-weight:700;color:var(--purple)">$@_apRev.ToString("N0")</span>
+                        </div>
+                        <div class="util-bar" style="width:100%"><div class="util-fill" style="width:@_apPct.ToString("N0")%"></div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">AutoPilot Impact</span>
+                    <span class="card-badge badge-green">ACTIVE</span>
+                </div>
+                <div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
+                    <div style="display:flex;justify-content:space-between;font-size:13px">
+                        <span style="color:var(--text-3)">Slots filled</span>
+                        <span style="font-weight:700;color:var(--green)">@(_apStats?.SlotsFilled ?? 0)</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:13px">
+                        <span style="color:var(--text-3)">No-shows recovered</span>
+                        <span style="font-weight:700;color:var(--green)">@(_apStats?.NoShowsRecovered ?? 0)</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:13px">
+                        <span style="color:var(--text-3)">Winbacks triggered</span>
+                        <span style="font-weight:700;color:var(--text)">@(_apStats?.WinbacksTriggered ?? 0)</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:13px;padding-top:8px;border-top:1px solid var(--border-2)">
+                        <span style="font-weight:700">Revenue recovered</span>
+                        <span style="font-weight:800;color:var(--purple)">$@(_apStats?.TotalRevenueRecovered.ToString("N0") ?? "0")</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-    <div class="right-col">
-        <div class="card">
-            <div class="card-header">
-                <span class="card-title">Revenue Mix</span>
-            </div>
-            <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
-                <div>
-                    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
-                        <span>Services</span><span style="font-weight:700">$4,890</span>
-                    </div>
-                    <div class="util-bar" style="width:100%"><div class="util-fill" style="width:85%"></div></div>
-                </div>
-                <div>
-                    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
-                        <span>AutoPilot</span><span style="font-weight:700;color:var(--purple)">$340</span>
-                    </div>
-                    <div class="util-bar" style="width:100%"><div class="util-fill" style="width:15%"></div></div>
-                </div>
-            </div>
-        </div>
-        <div class="card">
-            <div class="card-header">
-                <span class="card-title">Missed Revenue</span>
-                <span class="card-badge badge-amber">OPPORTUNITY</span>
-            </div>
-            <div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
-                <div style="display:flex;justify-content:space-between;font-size:13px">
-                    <span style="color:var(--text-3)">Unfilled slots value</span>
-                    <span style="font-weight:700;color:var(--amber)">$480</span>
-                </div>
-                <div style="display:flex;justify-content:space-between;font-size:13px">
-                    <span style="color:var(--text-3)">Missed upsells</span>
-                    <span style="font-weight:700;color:var(--amber)">$220</span>
-                </div>
-                <div style="display:flex;justify-content:space-between;font-size:13px;padding-top:8px;border-top:1px solid var(--border-2)">
-                    <span style="font-weight:700">Total opportunity</span>
-                    <span style="font-weight:800;color:var(--red)">$700</span>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+}
 
 @code {
-    protected override void OnInitialized()
+    private bool _loading = true;
+    private IEnumerable<StaffDto>? _staff;
+    private List<StaffPerformanceDto> _performances = new();
+    private AutoPilotStatsDto? _apStats;
+
+    private decimal _avgUtil;
+    private decimal _avgRebook;
+    private decimal _avgNoShow;
+    private decimal _totalRev;
+    private decimal _apRev;
+    private decimal _serviceRev;
+    private decimal _servicePct;
+    private decimal _apPct;
+
+    protected override async Task OnInitializedAsync()
     {
-        if (!AppState.IsAuthenticated) Nav.NavigateTo("/login");
+        if (!AppState.IsAuthenticated) { Nav.NavigateTo("/login"); return; }
+
+        var staffTask = StaffService.GetAllAsync();
+        var apTask = AutoPilotService.GetStatsAsync();
+        await Task.WhenAll(staffTask, apTask).ConfigureAwait(false);
+
+        _staff = staffTask.Result;
+        _apStats = apTask.Result;
+
+        if (_staff != null)
+        {
+            var perfTasks = _staff.Select(s => StaffService.GetPerformanceAsync(s.Id));
+            var results = await Task.WhenAll(perfTasks).ConfigureAwait(false);
+            _performances = results.Where(r => r != null).Cast<StaffPerformanceDto>().ToList();
+        }
+
+        _avgUtil = _performances.Any() ? _performances.Average(p => p.UtilizationPct) : 0;
+        _avgRebook = _performances.Any() ? _performances.Average(p => p.RebookRatePct) : 0;
+        _avgNoShow = _performances.Any() ? _performances.Average(p => p.NoShowRatePct) : 0;
+        _totalRev = _performances.Sum(p => p.Revenue);
+        _apRev = _apStats?.TotalRevenueRecovered ?? 0;
+        _serviceRev = _totalRev - _apRev;
+        _servicePct = _totalRev > 0 ? (_serviceRev / _totalRev * 100) : 0;
+        _apPct = _totalRev > 0 ? (_apRev / _totalRev * 100) : 0;
+
+        _loading = false;
     }
 }

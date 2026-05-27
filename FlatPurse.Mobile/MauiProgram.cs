@@ -17,7 +17,7 @@ namespace FlatPurse.Mobile
 
             builder.Services.AddMauiBlazorWebView();
 
-            var apiBaseUrl = "https://localhost:7001/"; // update with your API URL
+            var apiBaseUrl = "https://flowapi.flatpurse.com/api/";
             builder.Services.AddFlatPurseMobileServices(apiBaseUrl);
 
 #if DEBUG

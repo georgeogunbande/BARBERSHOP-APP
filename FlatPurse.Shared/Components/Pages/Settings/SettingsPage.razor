@@ -1,8 +1,7 @@
 @page "/settings"
-@using System.Text.Json
 @using FlatPurse.Models
 @using FlatPurse.Components.Shared
-@inject FlatPurse.Services.IApiService ApiService
+@inject FlatPurse.Services.ISettingsService SettingsService
 @inject FlatPurse.Services.IAppStateService AppState
 @inject NavigationManager Nav
 
@@ -28,7 +27,36 @@ else
         {
             <div class="settings-section">
                 <h3>Business Information</h3>
-                @if (AppState.CurrentUser?.Business != null)
+                @if (_settings?.Business != null)
+                {
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <span class="detail-label">Business Name</span>
+                            <span>@_settings.Business.Name</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">City</span>
+                            <span>@(_settings.Business.City ?? "Not set")</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Type</span>
+                            <span>@(_settings.Business.Type ?? "Not set")</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Booking Handle</span>
+                            <span>@(_settings.Business.BookingHandle ?? "Not set")</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Currency</span>
+                            <span>@(_settings.Business.Currency ?? "Not set")</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Theme</span>
+                            <span>@(_settings.Business.ActiveTheme ?? "Default")</span>
+                        </div>
+                    </div>
+                }
+                else if (AppState.CurrentUser?.Business != null)
                 {
                     <div class="detail-grid">
                         <div class="detail-item">
@@ -44,12 +72,33 @@ else
                             <span>@(AppState.CurrentUser.Business.Type ?? "Not set")</span>
                         </div>
                         <div class="detail-item">
-                            <span class="detail-label">Booking Handle</span>
-                            <span>@(AppState.CurrentUser.Business.BookingHandle ?? "Not set")</span>
-                        </div>
-                        <div class="detail-item">
                             <span class="detail-label">Plan</span>
                             <span>@AppState.CurrentUser.Business.Plan</span>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="settings-section">
+                <h3>Booking Settings</h3>
+                @if (_settings?.Booking != null)
+                {
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <span class="detail-label">Min Advance Notice</span>
+                            <span>@_settings.Booking.MinAdvanceNoticeHours hours</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Max Advance Days</span>
+                            <span>@_settings.Booking.MaxAdvanceDays days</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Public Booking</span>
+                            <span>@(_settings.Booking.AllowPublicBooking ? "Enabled" : "Disabled")</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Require Deposit</span>
+                            <span>@(_settings.Booking.RequireDeposit ? "Yes" : "No")</span>
                         </div>
                     </div>
                 }
@@ -173,6 +222,7 @@ else
 @code {
     private bool _loading = true;
     private string _activeTab = "Business";
+    private BusinessSettingsDto? _settings;
     private SubscriptionDto? _subscription;
     private NotificationSettingsDto? _notifications;
     private IEnumerable<ChannelDto>? _channels;
@@ -185,16 +235,17 @@ else
             return;
         }
 
-        var settings = await ApiService.GetAsync<BusinessSettingsDto>("settings");
-        if (settings != null)
-        {
-            _notifications = settings.Notifications;
-        }
+        var settingsTask = SettingsService.GetSettingsAsync();
+        var subTask = SettingsService.GetSubscriptionAsync();
+        var channelsTask = SettingsService.GetChannelsAsync();
 
-        _subscription = await ApiService.GetAsync<SubscriptionDto>("settings/subscription");
-        _channels = await ApiService.GetAsync<IEnumerable<ChannelDto>>("channels");
+        await Task.WhenAll(settingsTask, subTask, channelsTask).ConfigureAwait(false);
+
+        _settings = settingsTask.Result;
+        _notifications = _settings?.Notifications;
+        _subscription = subTask.Result;
+        _channels = channelsTask.Result;
 
         _loading = false;
-        StateHasChanged();
     }
 }

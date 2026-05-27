@@ -16,6 +16,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMessagingService, MessagingService>();
         services.AddScoped<IAutoPilotService, AutoPilotService>();
         services.AddScoped<IDashboardService, DashboardService>();
+        services.AddScoped<IStaffService, StaffService>();
+        services.AddScoped<ISettingsService, SettingsService>();
+        services.AddScoped<IServiceCatalogService, ServiceCatalogService>();
         services.AddHttpClient<IApiService, ApiService>(c => c.BaseAddress = new Uri(apiBaseUrl));
         return services;
     }

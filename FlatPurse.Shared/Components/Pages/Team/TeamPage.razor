@@ -1,79 +1,107 @@
 @page "/team"
+@using FlatPurse.Models
+@using FlatPurse.Components.Shared
 @inject FlatPurse.Services.IAppStateService AppState
+@inject FlatPurse.Services.IStaffService StaffService
 @inject NavigationManager Nav
 
-<div class="stat-row">
-    <div class="stat-card">
-        <div class="stat-label">Team Members</div>
-        <div class="stat-value">4</div>
-        <div class="stat-delta neutral">3 stylists · 1 barber</div>
+@if (_loading)
+{
+    <LoadingSpinner />
+}
+else
+{
+    <div class="stat-row">
+        <div class="stat-card">
+            <div class="stat-label">Team Members</div>
+            <div class="stat-value">@(_staff?.Count() ?? 0)</div>
+            <div class="stat-delta neutral">@(_staff?.Count(s => s.IsActive) ?? 0) active</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Team Revenue</div>
+            <div class="stat-value">$@_teamRevenue.ToString("N0")</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Avg Utilization</div>
+            <div class="stat-value">@_avgUtil.ToString("N0")%</div>
+            <div class="stat-delta @(_avgUtil >= 80 ? "positive" : "warning")">@(_avgUtil >= 80 ? "" : "Target 80%")</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Avg Rebook Rate</div>
+            <div class="stat-value">@_avgRebook.ToString("N0")%</div>
+        </div>
     </div>
-    <div class="stat-card">
-        <div class="stat-label">Team Revenue</div>
-        <div class="stat-value">$3,167</div>
-        <div class="stat-delta positive">↑ 14% this week</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-label">Avg Utilization</div>
-        <div class="stat-value">68%</div>
-        <div class="stat-delta warning">⚠ Target 80%</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-label">Avg Rebook Rate</div>
-        <div class="stat-value">81%</div>
-        <div class="stat-delta positive">↑ 3% this month</div>
-    </div>
-</div>
 
-<div class="card">
-    <div class="card-header">
-        <span class="card-title">Team Performance</span>
-        <a href="/staff/new" class="btn btn-primary" style="font-size:12px;padding:6px 14px">+ Add Staff</a>
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Team Performance</span>
+            <a href="/staff/new" class="btn btn-primary" style="font-size:12px;padding:6px 14px">+ Add Staff</a>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Name</th><th>Role</th><th>Revenue</th><th>Appointments</th><th>Utilization</th><th>Rebook Rate</th><th>No-Show Rate</th></tr></thead>
+                <tbody>
+                    @if (_staff != null)
+                    {
+                        @foreach (var m in _staff)
+                        {
+                            var initials = $"{m.FirstName[..1]}{m.LastName[..1]}".ToUpper();
+                            var color = m.Colour ?? _avatarColors[Math.Abs(m.FirstName.GetHashCode()) % _avatarColors.Length];
+                            var perf = _performances.FirstOrDefault(p => p.StaffId == m.Id);
+                            <tr>
+                                <td>
+                                    <div style="display:flex;align-items:center;gap:10px">
+                                        <div style="width:28px;height:28px;border-radius:14px;background:@color;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff">@initials</div>
+                                        @m.FirstName @m.LastName
+                                    </div>
+                                </td>
+                                <td style="color:var(--text-3)">@m.Role</td>
+                                <td style="font-family:var(--mono);font-weight:700">$@(perf?.Revenue.ToString("N0") ?? "0")</td>
+                                <td>@(perf?.Appointments ?? 0)</td>
+                                <td>
+                                    <div style="display:flex;align-items:center;gap:8px">
+                                        @(perf?.UtilizationPct.ToString("N0") ?? "0")%
+                                        <div class="util-bar" style="width:60px"><div class="util-fill" style="width:@(perf?.UtilizationPct ?? 0)%"></div></div>
+                                    </div>
+                                </td>
+                                <td style="color:var(--green);font-weight:700">@(perf?.RebookRatePct.ToString("N0") ?? "0")%</td>
+                                <td style="color:@((perf?.NoShowRatePct ?? 0) == 0 ? "var(--green)" : "var(--amber)")">@(perf?.NoShowRatePct.ToString("N0") ?? "0")%</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
     </div>
-    <div class="table-wrap">
-        <table>
-            <thead><tr><th>Name</th><th>Role</th><th>Revenue</th><th>Appointments</th><th>Utilization</th><th>Rebook Rate</th><th>No-Show Rate</th></tr></thead>
-            <tbody>
-                @foreach (var m in _team)
-                {
-                    <tr>
-                        <td>
-                            <div style="display:flex;align-items:center;gap:10px">
-                                <div style="width:28px;height:28px;border-radius:14px;background:@m.Color;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff">@m.Initials</div>
-                                @m.Name
-                            </div>
-                        </td>
-                        <td style="color:var(--text-3)">@m.Role</td>
-                        <td style="font-family:var(--mono);font-weight:700">$@m.Rev</td>
-                        <td>@m.Apts</td>
-                        <td>
-                            <div style="display:flex;align-items:center;gap:8px">
-                                @m.Util%
-                                <div class="util-bar" style="width:60px"><div class="util-fill" style="width:@m.Util%"></div></div>
-                            </div>
-                        </td>
-                        <td style="color:var(--green);font-weight:700">@m.RebookRate</td>
-                        <td style="color:@(m.NoShowRate == "0%" ? "var(--green)" : "var(--amber)")">@m.NoShowRate</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
-</div>
+}
 
 @code {
-    private record TeamMember(string Initials, string Color, string Name, string Role, int Rev, int Apts, int Util, string RebookRate, string NoShowRate);
+    private bool _loading = true;
+    private IEnumerable<StaffDto>? _staff;
+    private List<StaffPerformanceDto> _performances = new();
+    private decimal _teamRevenue;
+    private decimal _avgUtil;
+    private decimal _avgRebook;
 
-    private readonly List<TeamMember> _team = new()
-    {
-        new("EW", "#534AB7", "Emma Watson",  "Senior Stylist", 1420, 6, 88, "92%", "0%"),
-        new("JM", "#DB2777", "James Miller", "Barber",          890, 7, 76, "78%", "8%"),
-        new("ZA", "#16A34A", "Zara Ahmed",   "Colorist",        537, 4, 62, "85%", "3%"),
-        new("KL", "#9333EA", "Kevin Lee",    "Stylist",         320, 3, 45, "70%", "0%"),
-    };
+    private static readonly string[] _avatarColors = { "#534AB7", "#DB2777", "#0891B2", "#D97706", "#9333EA", "#DC2626", "#0284C7", "#16A34A" };
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        if (!AppState.IsAuthenticated) Nav.NavigateTo("/login");
+        if (!AppState.IsAuthenticated) { Nav.NavigateTo("/login"); return; }
+
+        _staff = await StaffService.GetAllAsync().ConfigureAwait(false);
+
+        if (_staff != null)
+        {
+            var perfTasks = _staff.Select(s => StaffService.GetPerformanceAsync(s.Id));
+            var results = await Task.WhenAll(perfTasks).ConfigureAwait(false);
+            _performances = results.Where(r => r != null).Cast<StaffPerformanceDto>().ToList();
+        }
+
+        _teamRevenue = _performances.Sum(p => p.Revenue);
+        _avgUtil = _performances.Any() ? _performances.Average(p => p.UtilizationPct) : 0;
+        _avgRebook = _performances.Any() ? _performances.Average(p => p.RebookRatePct) : 0;
+
+        _loading = false;
     }
 }

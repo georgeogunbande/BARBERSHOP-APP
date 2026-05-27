@@ -1,3 +1,5 @@
+using FlatPurse.Models;
+
 namespace FlatPurse.Services;
 
 public class DashboardService : IDashboardService
@@ -6,6 +8,6 @@ public class DashboardService : IDashboardService
 
     public DashboardService(IApiService api) => _api = api;
 
-    public Task<object?> GetTodayBriefAsync() =>
-        _api.GetAsync<object>("brief/today");
+    public Task<DailyBriefDto?> GetTodayBriefAsync() =>
+        _api.GetAsync<DailyBriefDto>("brief/today");
 }

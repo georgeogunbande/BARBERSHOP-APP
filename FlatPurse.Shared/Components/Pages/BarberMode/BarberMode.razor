@@ -1,6 +1,9 @@
 @page "/barber"
+@using System.Text.Json
 @using FlatPurse.Models
+@using FlatPurse.Components.Shared
 @inject FlatPurse.Services.IAppStateService AppState
+@inject FlatPurse.Services.IBookingService BookingService
 @inject NavigationManager Nav
 @implements IDisposable
 
@@ -31,15 +34,21 @@
 
     <div class="barber-body">
         <div class="barber-next">
-            @if (_nextUp != null)
+            @if (_loading)
             {
+                <LoadingSpinner />
+            }
+            else if (_nextUp != null)
+            {
+                var initials = GetInitials(_nextUp.ClientName);
+                var color = GetColor(_nextUp.ClientName);
                 <div class="barber-next-label">Next up</div>
                 <div class="barber-next-card">
-                    <div class="barber-next-time">@_nextUp.Time</div>
-                    <div class="barber-next-avatar" style="background:@_nextUp.Color">@_nextUp.Initials</div>
+                    <div class="barber-next-time">@_nextUp.StartsAt.ToString("H:mm")</div>
+                    <div class="barber-next-avatar" style="background:@color">@initials</div>
                     <div class="barber-next-info">
-                        <div class="barber-next-name">@_nextUp.Name</div>
-                        <div class="barber-next-service">@_nextUp.Service</div>
+                        <div class="barber-next-name">@_nextUp.ClientName</div>
+                        <div class="barber-next-service">@_nextUp.ServiceName</div>
                     </div>
                     <div class="barber-next-price">$@_nextUp.Price</div>
                 </div>
@@ -53,18 +62,42 @@
         <div class="barber-schedule">
             <div class="barber-schedule-title">Today's Lineup</div>
             <div class="barber-schedule-list">
-                @foreach (var appt in _schedule)
+                @foreach (var appt in _bookings)
                 {
-                    <div class="barber-appt @(appt.Status == "done" ? "barber-appt-done" : appt.Status == "next" ? "barber-appt-next" : "")">
-                        <span class="barber-appt-time">@appt.Time</span>
-                        <div class="barber-appt-avatar" style="background:@appt.Color">@appt.Initials</div>
+                    var initials = GetInitials(appt.ClientName);
+                    var color = GetColor(appt.ClientName);
+                    var statusClass = appt.Status switch
+                    {
+                        BookingStatus.Completed => "done",
+                        BookingStatus.InProgress => "next",
+                        BookingStatus.Confirmed => "upcoming",
+                        BookingStatus.Pending => "upcoming",
+                        _ => ""
+                    };
+                    var statusLabel = appt.Status switch
+                    {
+                        BookingStatus.Completed => "Done",
+                        BookingStatus.InProgress => "Next",
+                        BookingStatus.Confirmed => "Upcoming",
+                        BookingStatus.Pending => "Pending",
+                        BookingStatus.Cancelled => "Cancelled",
+                        BookingStatus.NoShow => "No-Show",
+                        _ => appt.Status.ToString()
+                    };
+                    <div class="barber-appt @(statusClass == "done" ? "barber-appt-done" : statusClass == "next" ? "barber-appt-next" : "")">
+                        <span class="barber-appt-time">@appt.StartsAt.ToString("H:mm")</span>
+                        <div class="barber-appt-avatar" style="background:@color">@initials</div>
                         <div class="barber-appt-info">
-                            <div class="barber-appt-name">@appt.Name</div>
-                            <div class="barber-appt-service">@appt.Service</div>
+                            <div class="barber-appt-name">@appt.ClientName</div>
+                            <div class="barber-appt-service">@appt.ServiceName</div>
                         </div>
                         <span class="barber-appt-price">$@appt.Price</span>
-                        <span class="barber-appt-status status-@appt.Status">@appt.StatusLabel</span>
+                        <span class="barber-appt-status status-@statusClass">@statusLabel</span>
                     </div>
+                }
+                @if (!_bookings.Any() && !_loading)
+                {
+                    <div style="padding:20px;text-align:center;color:var(--text-3)">No appointments today</div>
                 }
             </div>
         </div>
@@ -89,25 +122,26 @@
 @code {
     private DateTime _now = DateTime.Now;
     private System.Timers.Timer? _timer;
+    private bool _loading = true;
+    private List<BookingDto> _bookings = new();
+    private BookingDto? _nextUp;
 
-    private record Appointment(string Time, string Initials, string Color, string Name, string Service, int Price, string Status, string StatusLabel);
+    private static readonly string[] _avatarColors = { "#534AB7", "#DB2777", "#16A34A", "#9333EA", "#0284C7", "#D97706", "#DC2626", "#0891B2" };
 
-    private readonly List<Appointment> _schedule = new()
+    private static string GetInitials(string name)
     {
-        new("9:00",  "MB", "#534AB7", "Marcus Brown",   "Fade + Design",  75,  "done",  "Done"),
-        new("10:00", "TJ", "#DB2777", "Tyler James",    "Full Cut",       55,  "done",  "Done"),
-        new("11:00", "DK", "#16A34A", "Daniel King",    "Cut + Beard",    65,  "done",  "Done"),
-        new("12:00", "AW", "#9333EA", "Alex White",     "Fade",           55,  "done",  "Done"),
-        new("13:00", "LP", "#0284C7", "Lisa Park",      "Colour + Cut",   130, "next",  "Next"),
-        new("14:00", "RN", "#534AB7", "Ryan Nguyen",    "Fade + Design",  75,  "upcoming","Upcoming"),
-        new("15:30", "SO", "#DB2777", "Sam O'Brien",    "Full Cut",       55,  "upcoming","Upcoming"),
-        new("16:00", "CH", "#16A34A", "Chris Hart",     "Beard Trim",     35,  "upcoming","Upcoming"),
-    };
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2) return $"{parts[0][..1]}{parts[^1][..1]}".ToUpper();
+        return parts.Length == 1 ? parts[0][..1].ToUpper() : "?";
+    }
 
-    private Appointment? _nextUp => _schedule.FirstOrDefault(a => a.Status == "next");
+    private static string GetColor(string name) =>
+        _avatarColors[Math.Abs(name.GetHashCode()) % _avatarColors.Length];
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
+        if (!AppState.IsAuthenticated) { Nav.NavigateTo("/login"); return; }
+
         _timer = new System.Timers.Timer(1000);
         _timer.Elapsed += (_, _) =>
         {
@@ -115,6 +149,32 @@
             InvokeAsync(StateHasChanged);
         };
         _timer.Start();
+
+        await LoadTodayBookingsAsync().ConfigureAwait(false);
+    }
+
+    private async Task LoadTodayBookingsAsync()
+    {
+        _loading = true;
+        var today = DateTime.Today;
+        var result = await BookingService.GetBookingsAsync(from: today, to: today.AddDays(1), limit: 100).ConfigureAwait(false);
+
+        if (result != null)
+        {
+            var json = JsonSerializer.Serialize(result);
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("items", out var items))
+            {
+                _bookings = JsonSerializer.Deserialize<List<BookingDto>>(items.GetRawText(),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+            }
+        }
+
+        _bookings = _bookings.OrderBy(b => b.StartsAt).ToList();
+        _nextUp = _bookings.FirstOrDefault(b =>
+            b.Status == BookingStatus.InProgress ||
+            (b.Status is BookingStatus.Confirmed or BookingStatus.Pending && b.StartsAt >= DateTime.Now));
+        _loading = false;
     }
 
     public void Dispose() => _timer?.Dispose();

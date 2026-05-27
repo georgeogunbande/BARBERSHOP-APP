@@ -2,6 +2,9 @@
 @page "/dashboard"
 @using FlatPurse.Models
 @inject FlatPurse.Services.IAppStateService AppState
+@inject FlatPurse.Services.IDashboardService DashboardService
+@inject FlatPurse.Services.IAutoPilotService AutoPilotService
+@inject FlatPurse.Services.IStaffService StaffService
 @inject NavigationManager Nav
 
 @if (!AppState.IsAuthenticated)
@@ -10,188 +13,210 @@
     return;
 }
 
-<div class="stat-row">
-    <div class="stat-card">
-        <div class="stat-label">Revenue Today</div>
-        <div class="stat-value">$1,085</div>
-        <div class="stat-delta positive">↑ 12% vs yesterday</div>
+@if (_loading)
+{
+    <div class="stat-row">
+        <div class="stat-card"><div class="stat-label">Loading...</div></div>
     </div>
-    <div class="stat-card">
-        <div class="stat-label">Appointments</div>
-        <div class="stat-value">8</div>
-        <div class="stat-delta positive">6 completed · 2 upcoming</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-label">AutoPilot Saves</div>
-        <div class="stat-value">$340</div>
-        <div class="stat-delta positive">↑ 2 no-shows recovered</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-label">Utilization</div>
-        <div class="stat-value">74%</div>
-        <div class="stat-delta warning">⚠ 2 gaps this afternoon</div>
-    </div>
-</div>
-
-<div class="main-grid">
-    <div>
-        <div class="card">
-            <div class="card-header">
-                <span class="card-title">Today's Schedule</span>
-                <span class="card-badge badge-purple">8 APPOINTMENTS</span>
-            </div>
-            <div class="schedule-list">
-                @foreach (var appt in _schedule)
-                {
-                    <div class="schedule-item">
-                        <span class="appt-time">@appt.Time</span>
-                        <div class="appt-avatar" style="background:@appt.Color">@appt.Initials</div>
-                        <div class="appt-info">
-                            <div class="appt-name">@appt.Name</div>
-                            <div class="appt-service">@appt.Service · @appt.Staff</div>
-                        </div>
-                        <span class="appt-price">$@appt.Price</span>
-                        <span class="appt-status status-@appt.Status">@appt.StatusLabel</span>
-                    </div>
-                }
-            </div>
+}
+else
+{
+    <div class="stat-row">
+        <div class="stat-card">
+            <div class="stat-label">Revenue Today</div>
+            <div class="stat-value">$@(_brief?.RevenueTodayProjected.ToString("N0") ?? "0")</div>
         </div>
-        <div class="card" style="margin-top:14px">
-            <div class="card-header">
-                <span class="card-title">AI Recommendations</span>
-                <span class="card-badge badge-purple">AI POWERED</span>
-            </div>
-            <div class="ai-list">
-                <div class="ai-card">
-                    <div class="ai-type winback">● WINBACK</div>
-                    <div class="ai-card-body">Lisa Park hasn't booked in 60+ days (LTV $4,800). She's at high churn risk. A personalized win-back message could recover her.</div>
-                    <div class="ai-actions">
-                        <button class="ai-btn ai-btn-primary">Send Win-Back</button>
-                        <button class="ai-btn ai-btn-secondary">Dismiss</button>
-                    </div>
-                </div>
-                <div class="ai-card">
-                    <div class="ai-type upsell">● UPSELL</div>
-                    <div class="ai-card-body">Daniel King has never tried Beard Grooming. Given his Cut + Beard history, there's a 78% upsell probability at 12:30 PM today.</div>
-                    <div class="ai-actions">
-                        <button class="ai-btn ai-btn-primary">Suggest at Checkout</button>
-                        <button class="ai-btn ai-btn-secondary">Skip</button>
-                    </div>
-                </div>
-                <div class="ai-card">
-                    <div class="ai-type slot">● SLOT FILLER</div>
-                    <div class="ai-card-body">3:00 PM slot opened up (Marcus cancelled). 4 clients match this time window. AutoPilot can fill it automatically.</div>
-                    <div class="ai-actions">
-                        <button class="ai-btn ai-btn-primary">Fill Now</button>
-                        <button class="ai-btn ai-btn-secondary">Let AutoPilot handle</button>
-                    </div>
-                </div>
-            </div>
+        <div class="stat-card">
+            <div class="stat-label">Appointments</div>
+            <div class="stat-value">@(_brief?.AppointmentsToday ?? 0)</div>
+            <div class="stat-delta positive">@(_brief?.UpcomingBookings?.Count ?? 0) upcoming</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">AutoPilot Saves</div>
+            <div class="stat-value">$@(_apStats?.TotalRevenueRecovered.ToString("N0") ?? "0")</div>
+            <div class="stat-delta positive">@(_apStats?.NoShowsRecovered ?? 0) no-shows recovered</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Slots Filled</div>
+            <div class="stat-value">@(_apStats?.SlotsFilled ?? 0)</div>
+            <div class="stat-delta positive">@(_apStats?.MessagesSent ?? 0) messages sent</div>
         </div>
     </div>
 
-    <div class="right-col">
-        <div class="quick-stats">
-            <div class="qs-cell">
-                <div class="qs-label">Week Revenue</div>
-                <div class="qs-value">$5,240</div>
-                <div class="qs-sub">↑ 18% vs last week</div>
+    <div class="main-grid">
+        <div>
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Today's Schedule</span>
+                    <span class="card-badge badge-purple">@(_brief?.UpcomingBookings?.Count ?? 0) UPCOMING</span>
+                </div>
+                <div class="schedule-list">
+                    @if (_brief?.UpcomingBookings != null)
+                    {
+                        @foreach (var appt in _brief.UpcomingBookings)
+                        {
+                            var initials = $"{appt.ClientName.Split(' ').FirstOrDefault()?[..1]}{appt.ClientName.Split(' ').LastOrDefault()?[..1]}".ToUpper();
+                            var color = _avatarColors[Math.Abs(appt.ClientName.GetHashCode()) % _avatarColors.Length];
+                            var statusClass = appt.Status switch
+                            {
+                                BookingStatus.Completed => "done",
+                                BookingStatus.InProgress => "next",
+                                BookingStatus.Confirmed => "confirmed",
+                                BookingStatus.Cancelled => "risk",
+                                BookingStatus.NoShow => "risk",
+                                _ => "confirmed"
+                            };
+                            <div class="schedule-item">
+                                <span class="appt-time">@appt.StartsAt.ToString("H:mm")</span>
+                                <div class="appt-avatar" style="background:@color">@initials</div>
+                                <div class="appt-info">
+                                    <div class="appt-name">@appt.ClientName</div>
+                                    <div class="appt-service">@appt.ServiceName · @appt.StaffName</div>
+                                </div>
+                                <span class="appt-price">$@appt.Price</span>
+                                <span class="appt-status status-@statusClass">@appt.Status</span>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div style="padding:20px;text-align:center;color:var(--text-3)">No appointments today</div>
+                    }
+                </div>
             </div>
-            <div class="qs-cell">
-                <div class="qs-label">New Clients</div>
-                <div class="qs-value">3</div>
-                <div class="qs-sub">This week</div>
-            </div>
-            <div class="qs-cell">
-                <div class="qs-label">Rebook Rate</div>
-                <div class="qs-value">84%</div>
-                <div class="qs-sub">↑ 6% this month</div>
-            </div>
-            <div class="qs-cell">
-                <div class="qs-label">Avg Ticket</div>
-                <div class="qs-value">$136</div>
-                <div class="qs-sub">↑ $12 this week</div>
-            </div>
-        </div>
 
-        <div class="card">
-            <div class="card-header">
-                <span class="card-title">Team Today</span>
-                <span class="card-badge badge-green">4 ACTIVE</span>
-            </div>
-            @foreach (var m in _team)
+            @if (_brief?.AutoPilotHighlights?.Any() == true || _brief?.Alerts?.Any() == true)
             {
-                <div class="team-item">
-                    <div class="team-avatar" style="background:@m.Color">@m.Initials</div>
-                    <div>
-                        <div class="team-name">@m.Name</div>
-                        <div class="team-role">@m.Role</div>
-                        <div class="util-bar" style="width:80px">
-                            <div class="util-fill" style="width:@m.Util%"></div>
-                        </div>
+                <div class="card" style="margin-top:14px">
+                    <div class="card-header">
+                        <span class="card-title">AI Recommendations</span>
+                        <span class="card-badge badge-purple">AI POWERED</span>
                     </div>
-                    <div class="team-stat">
-                        <div class="team-rev">$@m.Rev</div>
-                        <div class="team-apts">@m.Apts apts</div>
+                    <div class="ai-list">
+                        @if (_brief.AutoPilotHighlights != null)
+                        {
+                            @foreach (var highlight in _brief.AutoPilotHighlights)
+                            {
+                                <div class="ai-card">
+                                    <div class="ai-type slot">● AUTOPILOT</div>
+                                    <div class="ai-card-body">@highlight</div>
+                                </div>
+                            }
+                        }
+                        @if (_brief.Alerts != null)
+                        {
+                            @foreach (var alert in _brief.Alerts)
+                            {
+                                <div class="ai-card">
+                                    <div class="ai-type winback">● ALERT</div>
+                                    <div class="ai-card-body">@alert</div>
+                                </div>
+                            }
+                        }
                     </div>
                 </div>
             }
         </div>
 
-        <div class="card">
-            <div class="card-header">
-                <span class="card-title">AutoPilot Today</span>
-                <span class="card-badge badge-green">ACTIVE</span>
+        <div class="right-col">
+            <div class="quick-stats">
+                <div class="qs-cell">
+                    <div class="qs-label">Messages Sent</div>
+                    <div class="qs-value">@(_apStats?.MessagesSent ?? 0)</div>
+                    <div class="qs-sub">Today via AutoPilot</div>
+                </div>
+                <div class="qs-cell">
+                    <div class="qs-label">Winbacks</div>
+                    <div class="qs-value">@(_apStats?.WinbacksTriggered ?? 0)</div>
+                    <div class="qs-sub">Triggered today</div>
+                </div>
+                <div class="qs-cell">
+                    <div class="qs-label">Reviews</div>
+                    <div class="qs-value">@(_apStats?.ReviewsRequested ?? 0)</div>
+                    <div class="qs-sub">Requested today</div>
+                </div>
+                <div class="qs-cell">
+                    <div class="qs-label">Slots Filled</div>
+                    <div class="qs-value">@(_apStats?.SlotsFilled ?? 0)</div>
+                    <div class="qs-sub">By AutoPilot</div>
+                </div>
             </div>
-            <div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
-                <div style="display:flex;justify-content:space-between;font-size:13px">
-                    <span style="color:var(--text-3)">Slots filled</span>
-                    <span style="font-weight:700;color:var(--green)">2</span>
+
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Team Today</span>
+                    <span class="card-badge badge-green">@(_staff?.Count() ?? 0) ACTIVE</span>
                 </div>
-                <div style="display:flex;justify-content:space-between;font-size:13px">
-                    <span style="color:var(--text-3)">Messages sent</span>
-                    <span style="font-weight:700;color:var(--text)">14</span>
+                @if (_staff != null)
+                {
+                    @foreach (var m in _staff.Where(s => s.IsActive))
+                    {
+                        var initials = $"{m.FirstName[..1]}{m.LastName[..1]}".ToUpper();
+                        var color = m.Colour ?? _avatarColors[Math.Abs(m.FirstName.GetHashCode()) % _avatarColors.Length];
+                        <div class="team-item">
+                            <div class="team-avatar" style="background:@color">@initials</div>
+                            <div>
+                                <div class="team-name">@m.FirstName @m.LastName</div>
+                                <div class="team-role">@m.Role</div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">AutoPilot Today</span>
+                    <span class="card-badge badge-green">ACTIVE</span>
                 </div>
-                <div style="display:flex;justify-content:space-between;font-size:13px">
-                    <span style="color:var(--text-3)">Revenue recovered</span>
-                    <span style="font-weight:700;color:var(--purple)">$340</span>
-                </div>
-                <div style="display:flex;justify-content:space-between;font-size:13px">
-                    <span style="color:var(--text-3)">Review requests</span>
-                    <span style="font-weight:700;color:var(--text)">6</span>
+                <div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
+                    <div style="display:flex;justify-content:space-between;font-size:13px">
+                        <span style="color:var(--text-3)">Slots filled</span>
+                        <span style="font-weight:700;color:var(--green)">@(_apStats?.SlotsFilled ?? 0)</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:13px">
+                        <span style="color:var(--text-3)">Messages sent</span>
+                        <span style="font-weight:700;color:var(--text)">@(_apStats?.MessagesSent ?? 0)</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:13px">
+                        <span style="color:var(--text-3)">Revenue recovered</span>
+                        <span style="font-weight:700;color:var(--purple)">$@(_apStats?.TotalRevenueRecovered.ToString("N0") ?? "0")</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:13px">
+                        <span style="color:var(--text-3)">Review requests</span>
+                        <span style="font-weight:700;color:var(--text)">@(_apStats?.ReviewsRequested ?? 0)</span>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
+}
 
 @code {
-    private record ApptRow(string Time, string Initials, string Color, string Name, string Service, string Staff, int Price, string Status, string StatusLabel);
-    private record TeamMember(string Initials, string Color, string Name, string Role, int Rev, int Apts, int Util);
+    private bool _loading = true;
+    private DailyBriefDto? _brief;
+    private AutoPilotStatsDto? _apStats;
+    private IEnumerable<StaffDto>? _staff;
 
-    private readonly List<ApptRow> _schedule = new()
-    {
-        new("9:00",  "SJ", "#534AB7", "Sarah Johnson",  "Color + Cut",        "Emma",  185, "done",      "Done"),
-        new("10:30", "MC", "#DB2777", "Michael Chen",   "Beard Trim",         "James", 35,  "done",      "Done"),
-        new("11:15", "JL", "#0891B2", "Jamie Lee",      "Balayage",           "Emma",  220, "next",      "Up Next"),
-        new("12:30", "DK", "#D97706", "Daniel King",    "Skin Fade",          "James", 50,  "risk",      "Risk"),
-        new("14:00", "EM", "#9333EA", "Emma Mitchell",  "Highlights + Style", "Emma",  240, "confirmed", "Confirmed"),
-        new("15:30", "LP", "#DC2626", "Lisa Park",      "Balayage",           "Emma",  285, "confirmed", "Confirmed"),
-        new("16:30", "MT", "#0284C7", "Marcus Taylor",  "Cut + Beard",        "James", 65,  "risk",      "Risk"),
-        new("17:00", "AK", "#16A34A", "Aisha Khan",     "Signature Cut",      "Zara",  45,  "confirmed", "Confirmed"),
-    };
+    private static readonly string[] _avatarColors = { "#534AB7", "#DB2777", "#0891B2", "#D97706", "#9333EA", "#DC2626", "#0284C7", "#16A34A" };
 
-    private readonly List<TeamMember> _team = new()
-    {
-        new("EW", "#534AB7", "Emma Watson",  "Senior Stylist", 1420, 6, 88),
-        new("JM", "#DB2777", "James Miller", "Barber",          890, 7, 76),
-        new("ZA", "#16A34A", "Zara Ahmed",   "Colorist",        537, 4, 62),
-        new("KL", "#9333EA", "Kevin Lee",    "Stylist",         320, 3, 45),
-    };
-
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         if (!AppState.IsAuthenticated)
+        {
             Nav.NavigateTo("/login");
+            return;
+        }
+
+        var briefTask = DashboardService.GetTodayBriefAsync();
+        var statsTask = AutoPilotService.GetStatsAsync();
+        var staffTask = StaffService.GetAllAsync();
+
+        await Task.WhenAll(briefTask, statsTask, staffTask).ConfigureAwait(false);
+
+        _brief = briefTask.Result;
+        _apStats = statsTask.Result;
+        _staff = staffTask.Result;
+        _loading = false;
     }
 }
