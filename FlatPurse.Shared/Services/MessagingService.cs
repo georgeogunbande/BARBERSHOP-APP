@@ -2,11 +2,11 @@ using FlatPurse.Models;
 
 namespace FlatPurse.Services;
 
-public class MessagingService
+public class MessagingService : IMessagingService
 {
-    private readonly ApiService _api;
+    private readonly IApiService _api;
 
-    public MessagingService(ApiService api) => _api = api;
+    public MessagingService(IApiService api) => _api = api;
 
     public Task<object?> SendSmsAsync(SendSmsRequest req) =>
         _api.PostAsync<object>("messaging/sms", req);

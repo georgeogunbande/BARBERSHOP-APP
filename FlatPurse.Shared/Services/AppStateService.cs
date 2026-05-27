@@ -2,7 +2,7 @@ using FlatPurse.Models;
 
 namespace FlatPurse.Services;
 
-public class AppStateService
+public class AppStateService : IAppStateService
 {
     public UserDto? CurrentUser { get; private set; }
     public bool IsAuthenticated => CurrentUser != null;

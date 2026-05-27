@@ -2,9 +2,9 @@
 @using System.Text.Json
 @using FlatPurse.Models
 @using FlatPurse.Components.Shared
-@inject FlatPurse.Services.BookingService BookingService
-@inject FlatPurse.Services.ClientService ClientService
-@inject FlatPurse.Services.AppStateService AppState
+@inject FlatPurse.Services.IBookingService BookingService
+@inject FlatPurse.Services.IClientService ClientService
+@inject FlatPurse.Services.IAppStateService AppState
 @inject NavigationManager Nav
 
 <div class="page-header">

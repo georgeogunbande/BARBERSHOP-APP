@@ -2,11 +2,11 @@ using FlatPurse.Models;
 
 namespace FlatPurse.Services;
 
-public class PaymentService
+public class PaymentService : IPaymentService
 {
-    private readonly ApiService _api;
+    private readonly IApiService _api;
 
-    public PaymentService(ApiService api) => _api = api;
+    public PaymentService(IApiService api) => _api = api;
 
     public Task<IEnumerable<PaymentMethodDto>?> GetPaymentMethodsAsync(Guid clientId) =>
         _api.GetAsync<IEnumerable<PaymentMethodDto>>($"payments/methods?clientId={clientId}");

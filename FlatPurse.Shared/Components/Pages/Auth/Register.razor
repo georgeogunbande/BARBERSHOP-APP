@@ -1,8 +1,8 @@
 @page "/register"
 @layout FlatPurse.Components.Layout.AuthLayout
 @using FlatPurse.Models
-@inject FlatPurse.Services.AuthService AuthService
-@inject FlatPurse.Services.AppStateService AppState
+@inject FlatPurse.Services.IAuthService AuthService
+@inject FlatPurse.Services.IAppStateService AppState
 @inject NavigationManager Nav
 
 <div class="auth-form-wrapper">

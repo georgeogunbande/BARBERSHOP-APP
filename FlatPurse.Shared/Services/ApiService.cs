@@ -3,7 +3,7 @@ using System.Net.Http.Headers;
 
 namespace FlatPurse.Services;
 
-public class ApiService
+public class ApiService : IApiService
 {
     private readonly HttpClient _http;
     private readonly ITokenStorage _tokenStorage;

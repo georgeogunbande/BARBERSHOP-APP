@@ -2,11 +2,11 @@ using FlatPurse.Models;
 
 namespace FlatPurse.Services;
 
-public class ClientService
+public class ClientService : IClientService
 {
-    private readonly ApiService _api;
+    private readonly IApiService _api;
 
-    public ClientService(ApiService api) => _api = api;
+    public ClientService(IApiService api) => _api = api;
 
     public Task<PagedResult<ClientDto>?> GetClientsAsync(int page = 1, int limit = 50, string? sort = null, ClientTag? tag = null, ChurnRisk? churnRisk = null)
     {

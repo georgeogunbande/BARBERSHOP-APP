@@ -2,13 +2,13 @@ using FlatPurse.Models;
 
 namespace FlatPurse.Services;
 
-public class AuthService
+public class AuthService : IAuthService
 {
-    private readonly ApiService _api;
+    private readonly IApiService _api;
     private readonly ITokenStorage _tokenStorage;
-    private readonly AppStateService _state;
+    private readonly IAppStateService _state;
 
-    public AuthService(ApiService api, ITokenStorage tokenStorage, AppStateService state)
+    public AuthService(IApiService api, ITokenStorage tokenStorage, IAppStateService state)
     {
         _api = api;
         _tokenStorage = tokenStorage;

@@ -2,11 +2,11 @@ using FlatPurse.Models;
 
 namespace FlatPurse.Services;
 
-public class AutoPilotService
+public class AutoPilotService : IAutoPilotService
 {
-    private readonly ApiService _api;
+    private readonly IApiService _api;
 
-    public AutoPilotService(ApiService api) => _api = api;
+    public AutoPilotService(IApiService api) => _api = api;
 
     public Task<AutoPilotStatusDto?> GetStatusAsync() =>
         _api.GetAsync<AutoPilotStatusDto>("autopilot");

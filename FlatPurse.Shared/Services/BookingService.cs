@@ -2,11 +2,11 @@ using FlatPurse.Models;
 
 namespace FlatPurse.Services;
 
-public class BookingService
+public class BookingService : IBookingService
 {
-    private readonly ApiService _api;
+    private readonly IApiService _api;
 
-    public BookingService(ApiService api) => _api = api;
+    public BookingService(IApiService api) => _api = api;
 
     public Task<object?> GetBookingsAsync(DateTime? from = null, DateTime? to = null, Guid? staffId = null, int page = 1, int limit = 50)
     {
