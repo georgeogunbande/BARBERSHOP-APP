@@ -1,0 +1,29 @@
+<div class="sw-card sw-welcome">
+    <div class="sw-logo">
+        <div class="sw-logo-mark">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+            </svg>
+        </div>
+        <div>
+            <div class="sw-brand">FlatPurse</div>
+            <div class="sw-brand-tag">FLOW</div>
+        </div>
+    </div>
+
+    <h1 class="sw-hero-title">Welcome to<br/><span class="sw-gradient-text">FlatPurse Flow</span></h1>
+    <p class="sw-hero-sub">AI Revenue Autopilot for<br/>salons &amp; barbershops</p>
+
+    <ul class="sw-feature-list">
+        <li><span class="sw-feature-dot sw-dot-green"></span>AutoPilot fills cancelled slots</li>
+        <li><span class="sw-feature-dot sw-dot-red"></span>Built in Canada — Interac &amp; CAD</li>
+        <li><span class="sw-feature-dot sw-dot-purple"></span>Tap to Pay — no hardware</li>
+        <li><span class="sw-feature-dot sw-dot-orange"></span>No marketplace. Your clients stay yours</li>
+    </ul>
+
+    <button class="sw-btn-primary" @onclick="OnNext">Get started →</button>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnNext { get; set; }
+}

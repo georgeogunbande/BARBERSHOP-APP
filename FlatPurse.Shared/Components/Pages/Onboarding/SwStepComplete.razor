@@ -1,0 +1,22 @@
+@inject NavigationManager Nav
+
+<div class="sw-card sw-complete">
+    <div class="sw-complete-emoji">🎉</div>
+    <h1 class="sw-complete-title">You're all set!</h1>
+    <p class="sw-complete-sub">Slinde Cuts is ready to take bookings and recover revenue automatically.</p>
+
+    <ul class="sw-complete-checks">
+        <li><span class="sw-check-tick">✓</span> Booking page live at flatpurse.app/appointments/cuts</li>
+        <li><span class="sw-check-tick">✓</span> AutoPilot enabled — 6 flows running</li>
+        <li><span class="sw-check-tick">✓</span> 247 clients imported</li>
+        <li><span class="sw-check-tick">✓</span> Team set up (3 staff)</li>
+        <li><span class="sw-check-tick">✓</span> Stripe connected</li>
+        <li><span class="sw-check-flag">🇨🇦</span> PIPEDA compliant · Built in Canada</li>
+    </ul>
+
+    <button class="sw-btn-primary" @onclick="GoToDashboard">Open FlatPurse Flow →</button>
+</div>
+
+@code {
+    void GoToDashboard() => Nav.NavigateTo("/dashboard");
+}

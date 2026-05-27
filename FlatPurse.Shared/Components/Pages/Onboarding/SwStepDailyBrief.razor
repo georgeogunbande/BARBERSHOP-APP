@@ -1,0 +1,51 @@
+<div class="sw-card">
+    <h2 class="sw-card-title">Daily Brief</h2>
+    <p class="sw-card-sub">Your morning revenue report at 7am.</p>
+
+    <div class="sw-brief-preview">
+        <div class="sw-brief-preview-header">
+            <span class="sw-brief-time">PREVIEW — 7:02 AM</span>
+        </div>
+        <div class="sw-brief-body">
+            <div class="sw-brief-greeting">Good morning, George ☀️</div>
+            <div class="sw-brief-items">
+                <div class="sw-brief-item sw-brief-item--green">
+                    <span>💰</span> +C$240 recovered overnight by AutoPilot
+                </div>
+                <div class="sw-brief-item sw-brief-item--blue">
+                    <span>📅</span> Today is 78% booked (18/23 slots)
+                </div>
+                <div class="sw-brief-item sw-brief-item--amber">
+                    <span>⚠️</span> 2 items need your attention
+                </div>
+                <div class="sw-brief-item sw-brief-item--red">
+                    <span>🏆</span> Lisa Park — 73 days overdue
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="sw-brief-time-pick">
+        <div class="sw-brief-time-label">Delivery time</div>
+        <div class="sw-brief-times">
+            @foreach (var t in _times)
+            {
+                <button class="sw-brief-time-btn @(_selected == t ? "sw-brief-time-btn--active" : "")" @onclick="() => _selected = t">@t</button>
+            }
+        </div>
+    </div>
+
+    <button class="sw-btn-primary" @onclick="OnNext">Set up Daily Brief →</button>
+
+    <div class="sw-nav-row">
+        <button class="sw-btn-ghost" @onclick="OnBack">← Back</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnNext { get; set; }
+    [Parameter] public EventCallback OnBack { get; set; }
+
+    string _selected = "7:00 AM";
+    static readonly string[] _times = ["6:00 AM", "6:30 AM", "7:00 AM", "7:30 AM"];
+}

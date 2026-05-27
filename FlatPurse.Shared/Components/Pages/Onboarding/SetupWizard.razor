@@ -1,0 +1,48 @@
+@page "/setup"
+@layout FlatPurse.Components.Layout.AuthLayout
+@inject NavigationManager Nav
+
+<div class="sw-shell">
+    <div class="sw-progress-bar">
+        <div class="sw-progress-fill" style="width: @((_step / (double)(_totalSteps - 1)) * 100)%"></div>
+    </div>
+
+    <div class="sw-step-indicator">
+        <span class="sw-step-label">@_stepLabels[_step]</span>
+        <span class="sw-step-count">@(_step + 1) / @_totalSteps</span>
+    </div>
+
+    <div class="sw-body">
+        @if (_step == 0)  { <SwStepWelcome          OnNext="Next" /> }
+        else if (_step == 1)  { <SwStepCreateAccount    OnNext="Next" OnBack="Back" /> }
+        else if (_step == 2)  { <SwStepMigrate          OnNext="Next" OnBack="Back" /> }
+        else if (_step == 3)  { <SwStepCsvImport        OnNext="Next" OnBack="Back" /> }
+        else if (_step == 4)  { <SwStepBusinessInfo     OnNext="Next" OnBack="Back" /> }
+        else if (_step == 5)  { <SwStepBookingLink      OnNext="Next" OnBack="Back" /> }
+        else if (_step == 6)  { <SwStepOpeningHours     OnNext="Next" OnBack="Back" /> }
+        else if (_step == 7)  { <SwStepFamilyHours      OnNext="Next" OnBack="Back" /> }
+        else if (_step == 8)  { <SwStepServices         OnNext="Next" OnBack="Back" /> }
+        else if (_step == 9)  { <SwStepTeamSetup        OnNext="Next" OnBack="Back" /> }
+        else if (_step == 10) { <SwStepPayments         OnNext="Next" OnBack="Back" /> }
+        else if (_step == 11) { <SwStepChannels         OnNext="Next" OnBack="Back" /> }
+        else if (_step == 12) { <SwStepAutoPilot        OnNext="Next" OnBack="Back" /> }
+        else if (_step == 13) { <SwStepDailyBrief       OnNext="Next" OnBack="Back" /> }
+        else if (_step == 14) { <SwStepComplete /> }
+    </div>
+</div>
+
+@code {
+    int _step = 0;
+    const int _totalSteps = 15;
+
+    static readonly string[] _stepLabels =
+    [
+        "WELCOME", "CREATE ACCOUNT", "MIGRATE PLATFORM", "CSV IMPORT",
+        "BUSINESS INFO", "BOOKING LINK", "OPENING HOURS", "FAMILY HOURS",
+        "SERVICES & PRICING", "TEAM SETUP", "PAYMENTS SETUP", "CHANNELS",
+        "AUTOPILOT CONFIG", "DAILY BRIEF SETUP", "SETUP COMPLETE"
+    ];
+
+    void Next() { if (_step < _totalSteps - 1) _step++; }
+    void Back() { if (_step > 0) _step--; }
+}

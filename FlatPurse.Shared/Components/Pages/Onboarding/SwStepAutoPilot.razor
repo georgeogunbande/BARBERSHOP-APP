@@ -1,0 +1,48 @@
+<div class="sw-card">
+    <h2 class="sw-card-title">Turn on AutoPilot</h2>
+    <p class="sw-card-sub">Set and forget — it earns while you work.</p>
+
+    <div class="sw-ap-revenue-badge">
+        <div class="sw-ap-revenue-label">Estimated additional revenue</div>
+        <div class="sw-ap-revenue-amount">+C$1,200<span class="sw-ap-revenue-mo">/mo</span></div>
+    </div>
+
+    <div class="sw-flow-list">
+        @foreach (var f in _flows)
+        {
+            <div class="sw-flow-row">
+                <div class="sw-flow-icon">@f.Icon</div>
+                <div class="sw-flow-info">
+                    <div class="sw-flow-name">@f.Name</div>
+                    <div class="sw-flow-desc">@f.Desc</div>
+                </div>
+                <label class="sw-toggle">
+                    <input type="checkbox" @bind="f.Enabled" />
+                    <span class="sw-toggle-track"></span>
+                </label>
+            </div>
+        }
+    </div>
+
+    <button class="sw-btn-primary" @onclick="OnNext">Enable AutoPilot →</button>
+
+    <div class="sw-nav-row">
+        <button class="sw-btn-ghost" @onclick="OnBack">← Back</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnNext { get; set; }
+    [Parameter] public EventCallback OnBack { get; set; }
+
+    class FlowItem { public string Name = ""; public string Desc = ""; public string Icon = ""; public bool Enabled; }
+    List<FlowItem> _flows =
+    [
+        new() { Name = "Win-back campaigns",   Desc = "At 60+ days lapsed clients",    Icon = "🏆", Enabled = true  },
+        new() { Name = "Slot filler",          Desc = "Fill cancellations instantly",   Icon = "⚡", Enabled = true  },
+        new() { Name = "Rebooking nudges",     Desc = "",                               Icon = "🔁", Enabled = true  },
+        new() { Name = "Birthday offers",      Desc = "Auto-sends 3 days before",       Icon = "🎂", Enabled = false },
+        new() { Name = "Upsell at checkout",   Desc = "Suggest add-ons",               Icon = "💡", Enabled = true  },
+        new() { Name = "Review requests",      Desc = "Post-visit Google reviews",      Icon = "⭐", Enabled = true  },
+    ];
+}

@@ -1,0 +1,50 @@
+<div class="sw-card">
+    <h2 class="sw-card-title">Opening hours</h2>
+    <p class="sw-card-sub">Set your weekly schedule.</p>
+
+    <div class="sw-hours-list">
+        @foreach (var day in _days)
+        {
+            <div class="sw-hours-row">
+                <span class="sw-hours-day">@day.Name</span>
+                <label class="sw-toggle">
+                    <input type="checkbox" @bind="day.Open" />
+                    <span class="sw-toggle-track"></span>
+                </label>
+                @if (day.Open)
+                {
+                    <input class="sw-time-input" type="time" @bind="day.From" />
+                    <span class="sw-hours-sep">–</span>
+                    <input class="sw-time-input" type="time" @bind="day.To" />
+                }
+                else
+                {
+                    <span class="sw-hours-closed">Closed</span>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="sw-nav-row">
+        <button class="sw-btn-ghost" @onclick="OnBack">← Back</button>
+        <button class="sw-btn-primary sw-btn-sm" @onclick="OnNext">Save hours →</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnNext { get; set; }
+    [Parameter] public EventCallback OnBack { get; set; }
+
+    class DaySchedule { public string Name = ""; public bool Open = true; public TimeOnly From = new(9, 0); public TimeOnly To = new(19, 0); }
+
+    List<DaySchedule> _days =
+    [
+        new() { Name = "Mon", From = new(9,0),  To = new(19,0) },
+        new() { Name = "Tue", From = new(9,0),  To = new(19,0) },
+        new() { Name = "Wed", From = new(9,0),  To = new(19,0) },
+        new() { Name = "Thu", From = new(9,0),  To = new(19,30) },
+        new() { Name = "Fri", From = new(9,0),  To = new(19,30) },
+        new() { Name = "Sat", From = new(9,0),  To = new(17,0) },
+        new() { Name = "Sun", Open = false },
+    ];
+}

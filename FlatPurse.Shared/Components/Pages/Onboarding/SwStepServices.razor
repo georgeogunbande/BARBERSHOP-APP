@@ -1,0 +1,46 @@
+<div class="sw-card">
+    <h2 class="sw-card-title">Your services</h2>
+    <p class="sw-card-sub">Add what you offer and at what price.</p>
+
+    <div class="sw-service-list">
+        @foreach (var svc in _services)
+        {
+            <div class="sw-service-row">
+                <label class="sw-toggle">
+                    <input type="checkbox" @bind="svc.Active" />
+                    <span class="sw-toggle-track"></span>
+                </label>
+                <span class="sw-service-name">@svc.Name</span>
+                <div class="sw-service-price-wrap">
+                    <span class="sw-currency">C$</span>
+                    <input class="sw-price-input" type="number" @bind="svc.Price" />
+                </div>
+            </div>
+        }
+    </div>
+
+    <button class="sw-link-btn" @onclick="AddService">+ Add service</button>
+
+    <div class="sw-nav-row">
+        <button class="sw-btn-ghost" @onclick="OnBack">← Back</button>
+        <button class="sw-btn-primary sw-btn-sm" @onclick="OnNext">Continue →</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnNext { get; set; }
+    [Parameter] public EventCallback OnBack { get; set; }
+
+    class ServiceItem { public string Name = ""; public decimal Price; public bool Active = true; }
+
+    List<ServiceItem> _services =
+    [
+        new() { Name = "Signature Cut",  Price = 45 },
+        new() { Name = "Cut + Beard",    Price = 60 },
+        new() { Name = "Retouch",        Price = 30 },
+        new() { Name = "Kids Cut",       Price = 25 },
+        new() { Name = "Skin Fade",      Price = 50 },
+    ];
+
+    void AddService() => _services.Add(new() { Name = "New service", Price = 0 });
+}

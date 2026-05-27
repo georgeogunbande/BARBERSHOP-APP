@@ -1,0 +1,73 @@
+<div class="sw-card">
+    <h2 class="sw-card-title">Upload client CSV</h2>
+    <p class="sw-card-sub">Map your columns and we handle the rest.</p>
+
+    <div class="sw-csv-drop @(_isDragOver ? "sw-csv-drop--active" : "")"
+         @ondragover:preventDefault
+         @ondragover="() => _isDragOver = true"
+         @ondragleave="() => _isDragOver = false"
+         @ondrop="HandleDrop">
+        <div class="sw-csv-icon">📄</div>
+        @if (_fileName is not null)
+        {
+            <div class="sw-csv-file">@_fileName</div>
+            <div class="sw-csv-hint">@_rowCount clients detected</div>
+        }
+        else
+        {
+            <div class="sw-csv-cta">Drop CSV here or tap to browse</div>
+        }
+        <InputFile OnChange="HandleFile" class="sw-csv-input" accept=".csv" />
+    </div>
+
+    @if (_fileName is not null)
+    {
+        <div class="sw-mapping-table">
+            <div class="sw-mapping-header">COLUMN MAPPING</div>
+            @foreach (var m in _mappings)
+            {
+                <div class="sw-mapping-row">
+                    <span class="sw-mapping-col">@m.CsvCol</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    <span class="sw-mapping-target">@m.Target <span class="sw-mapping-check">✓</span></span>
+                </div>
+            }
+        </div>
+
+        <button class="sw-btn-primary" @onclick="OnNext">Import @_rowCount clients →</button>
+    }
+
+    <div class="sw-nav-row">
+        <button class="sw-btn-ghost" @onclick="OnBack">← Back</button>
+        @if (_fileName is null)
+        {
+            <button class="sw-btn-ghost" @onclick="OnNext">Skip →</button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnNext { get; set; }
+    [Parameter] public EventCallback OnBack { get; set; }
+
+    bool _isDragOver;
+    string? _fileName;
+    int _rowCount = 247;
+
+    record Mapping(string CsvCol, string Target);
+    List<Mapping> _mappings =
+    [
+        new("Name",  "Full Name"),
+        new("Phone", "Mobile"),
+        new("Email", "Email Address"),
+        new("LTV",   "Trial Spend"),
+    ];
+
+    async Task HandleFile(InputFileChangeEventArgs e)
+    {
+        _fileName = e.File.Name;
+        await Task.CompletedTask;
+    }
+
+    void HandleDrop() { _isDragOver = false; }
+}

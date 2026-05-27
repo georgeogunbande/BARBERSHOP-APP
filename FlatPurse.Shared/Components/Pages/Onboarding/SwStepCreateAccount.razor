@@ -1,0 +1,46 @@
+<div class="sw-card">
+    <h2 class="sw-card-title">Create your account</h2>
+    <p class="sw-card-sub">Your email and password — saves 10 seconds.</p>
+
+    <div class="sw-form-group">
+        <label class="sw-label">EMAIL ADDRESS</label>
+        <input class="sw-input" type="email" placeholder="george@slindecuts.com" @bind="_email" />
+    </div>
+
+    <div class="sw-form-group">
+        <label class="sw-label">PASSWORD</label>
+        <input class="sw-input" type="password" placeholder="••••••••" @bind="_password" />
+        @if (!string.IsNullOrEmpty(_password))
+        {
+            <div class="sw-password-strength">
+                <div class="sw-strength-bar">
+                    <div class="sw-strength-fill" style="width: @(_strengthPct)%; background: @(_strengthColor)"></div>
+                </div>
+                <span class="sw-strength-label" style="color: @(_strengthColor)">@_strengthLabel</span>
+            </div>
+        }
+    </div>
+
+    <button class="sw-btn-primary" @onclick="OnNext">Create account →</button>
+    <p class="sw-link-row">Already have an account? <a href="/login" class="sw-link">Sign in</a></p>
+
+    <div class="sw-back-row">
+        <button class="sw-btn-ghost" @onclick="OnBack">← Back</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnNext { get; set; }
+    [Parameter] public EventCallback OnBack { get; set; }
+
+    string _email = "";
+    string _password = "";
+
+    int _strengthPct => _password.Length == 0 ? 0
+        : _password.Length < 6 ? 25
+        : _password.Length < 10 ? 65
+        : 100;
+
+    string _strengthColor => _strengthPct < 40 ? "#DC2626" : _strengthPct < 70 ? "#D97706" : "#16A34A";
+    string _strengthLabel => _strengthPct < 40 ? "Weak" : _strengthPct < 70 ? "Fair" : "Strong";
+}

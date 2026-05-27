@@ -1,0 +1,31 @@
+<div class="sw-card">
+    <h2 class="sw-card-title">Your booking link</h2>
+    <p class="sw-card-sub">Clients book directly — no marketplace cut.</p>
+
+    <div class="sw-booking-preview">
+        <div class="sw-booking-preview-label">YOUR BOOKING URL</div>
+        <div class="sw-booking-preview-url">flatpurse.app/<span class="sw-booking-handle">@(_handle.ToLower().Replace(" ", ""))</span></div>
+        <div class="sw-booking-check">
+            <span class="sw-dot-green-sm"></span>
+            <span>flatpurse.app/appointments/@(_handle.ToLower().Replace(" ","")) is available</span>
+        </div>
+    </div>
+
+    <div class="sw-form-group">
+        <label class="sw-label">URL HANDLE</label>
+        <input class="sw-input" placeholder="slindecuts" @bind="_handle" />
+    </div>
+
+    <button class="sw-btn-primary" @onclick="OnNext">Claim my link →</button>
+
+    <div class="sw-nav-row">
+        <button class="sw-btn-ghost" @onclick="OnBack">← Back</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnNext { get; set; }
+    [Parameter] public EventCallback OnBack { get; set; }
+
+    string _handle = "slindecuts";
+}

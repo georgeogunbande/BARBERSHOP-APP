@@ -1,0 +1,54 @@
+<div class="sw-card">
+    <h2 class="sw-card-title">Connect payments</h2>
+    <p class="sw-card-sub">Accept cards at your phone. No hardware.</p>
+
+    <div class="sw-info-banner sw-info-banner--purple">
+        <span>💜</span>
+        <div>
+            <div class="sw-banner-title">Powered by Stripe</div>
+            <div class="sw-banner-body">Zero processing markup<br/>
+                <span class="sw-banner-detail">0.2% + 30¢ all orders &nbsp;·&nbsp; 0% + 30¢ in-person (Next)</span>
+            </div>
+            <div class="sw-stripe-note">Add Interac &amp; Deposits — zero fee.</div>
+        </div>
+    </div>
+
+    <div class="sw-payment-methods">
+        <div class="sw-pay-method-row">
+            <div class="sw-pay-icon">📱</div>
+            <div class="sw-pay-info">
+                <div class="sw-pay-name">Tap to Pay</div>
+                <div class="sw-pay-hint">Use your iPhone</div>
+            </div>
+            <label class="sw-toggle"><input type="checkbox" @bind="_tap" /><span class="sw-toggle-track"></span></label>
+        </div>
+        <div class="sw-pay-method-row">
+            <div class="sw-pay-icon">🔗</div>
+            <div class="sw-pay-info">
+                <div class="sw-pay-name">Payment links</div>
+            </div>
+            <label class="sw-toggle"><input type="checkbox" @bind="_links" /><span class="sw-toggle-track"></span></label>
+        </div>
+        <div class="sw-pay-method-row">
+            <div class="sw-pay-icon">💳</div>
+            <div class="sw-pay-info">
+                <div class="sw-pay-name">Card on file</div>
+            </div>
+            <label class="sw-toggle"><input type="checkbox" @bind="_card" /><span class="sw-toggle-track"></span></label>
+        </div>
+    </div>
+
+    <button class="sw-btn-stripe" @onclick="OnNext">Connect Stripe →</button>
+
+    <div class="sw-nav-row">
+        <button class="sw-btn-ghost" @onclick="OnBack">← Back</button>
+        <button class="sw-btn-ghost" @onclick="OnNext">Skip for now →</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnNext { get; set; }
+    [Parameter] public EventCallback OnBack { get; set; }
+
+    bool _tap = true, _links = true, _card = false;
+}

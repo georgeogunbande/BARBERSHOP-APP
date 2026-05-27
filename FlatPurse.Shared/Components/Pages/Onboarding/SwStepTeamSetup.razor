@@ -1,0 +1,41 @@
+<div class="sw-card">
+    <h2 class="sw-card-title">Your team</h2>
+    <p class="sw-card-sub">Add staff members and permissions.</p>
+
+    <div class="sw-team-list">
+        @foreach (var m in _members)
+        {
+            <div class="sw-team-row">
+                <div class="sw-team-avatar" style="background: @m.Color">@m.Initial</div>
+                <div class="sw-team-info">
+                    <div class="sw-team-name">@m.Name</div>
+                    <div class="sw-team-role">@m.Role</div>
+                </div>
+                <button class="sw-btn-solo">Solo</button>
+            </div>
+        }
+    </div>
+
+    <button class="sw-link-btn" @onclick="AddMember">+ Invite staff member</button>
+
+    <div class="sw-nav-row">
+        <button class="sw-btn-ghost" @onclick="OnBack">← Back</button>
+        <button class="sw-btn-primary sw-btn-sm" @onclick="OnNext">Continue →</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnNext { get; set; }
+    [Parameter] public EventCallback OnBack { get; set; }
+
+    record TeamMember(string Name, string Role, string Initial, string Color);
+
+    List<TeamMember> _members =
+    [
+        new("Emma Watson",  "Owner",   "E", "#8B30FF"),
+        new("James Millet", "Stylist",  "J", "#D93080"),
+        new("Zara Ahmed",   "Stylist",  "Z", "#0284C7"),
+    ];
+
+    void AddMember() { }
+}

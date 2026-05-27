@@ -1,0 +1,48 @@
+<div class="sw-card">
+    <h2 class="sw-card-title">Family Hours</h2>
+    <p class="sw-card-sub">Optional quiet-quota for families and kids.</p>
+
+    <div class="sw-info-banner sw-info-banner--green">
+        <span>🟢</span>
+        <span><strong>Family Hours</strong> — 15-day driver. AutoPilot now books clients &amp; sends messages during these hours, for exception.</span>
+    </div>
+
+    <div class="sw-fh-controls">
+        <div class="sw-fh-time-row">
+            <input class="sw-time-input" type="time" @bind="_from" />
+            <span class="sw-hours-sep">–</span>
+            <input class="sw-time-input" type="time" @bind="_to" />
+        </div>
+        <div class="sw-fh-day-pills">
+            @foreach (var d in _days)
+            {
+                <button class="sw-day-pill @(d.Selected ? "sw-day-pill--on" : "")" @onclick="() => d.Selected = !d.Selected">@d.Label</button>
+            }
+        </div>
+    </div>
+
+    <div class="sw-nav-row">
+        <button class="sw-btn-ghost" @onclick="OnBack">← Back</button>
+        <button class="sw-btn-primary sw-btn-sm" @onclick="OnNext">Set Family Hours →</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnNext { get; set; }
+    [Parameter] public EventCallback OnBack { get; set; }
+
+    TimeOnly _from = new(15, 0);
+    TimeOnly _to   = new(18, 0);
+
+    class DayPill { public string Label = ""; public bool Selected; }
+    List<DayPill> _days =
+    [
+        new() { Label = "Mo" },
+        new() { Label = "Tu", Selected = true },
+        new() { Label = "We", Selected = true },
+        new() { Label = "Th" },
+        new() { Label = "Fr", Selected = true },
+        new() { Label = "Sa", Selected = true },
+        new() { Label = "Su" },
+    ];
+}
